@@ -8,28 +8,12 @@
 static void jv_test();
 static void run_jq_tests();
 
-FILE* testdata;
 
-int main(int argc, char* argv[]) {
+int jq_testsuite(int argc, char* argv[]) {
   jv_test();
-  if (argc == 1) {
-    testdata = fopen("testdata", "r");
-  } else if (argc == 2) {
-    if (!strcmp(argv[1], "-")) {
-      testdata = stdin;
-    } else {
-      testdata = fopen(argv[1], "r");
-    }
-  } else {
-    printf("usage: %s OR cat testdata | %s - OR %s testdata\n", argv[0], argv[0], argv[0]);
-    return 127;
-  }
-  run_jq_tests();
-  if (testdata != stdin) fclose(testdata);
+  run_jq_tests(stdin);
+  return 0;
 }
-
-
-
 
 static int skipline(const char* buf) {
   int p = 0;
@@ -38,9 +22,10 @@ static int skipline(const char* buf) {
   return 0;
 }
 
-static void run_jq_tests() {
+static void run_jq_tests(FILE *testdata) {
   char buf[4096];
   int tests = 0, passed = 0, invalid = 0;
+  jq_state *jq = NULL;
 
   while (1) {
     if (!fgets(buf, sizeof(buf), testdata)) break;
@@ -51,21 +36,19 @@ static void run_jq_tests() {
     tests++;
     struct bytecode* bc = jq_compile(buf);
     if (!bc) {invalid++; continue;}
-#if JQ_DEBUG
     printf("Disassembly:\n");
     dump_disassembly(2, bc);
     printf("\n");
-#endif
     fgets(buf, sizeof(buf), testdata);
     jv input = jv_parse(buf);
     if (!jv_is_valid(input)){ invalid++; continue; }
-    jq_init(bc, input);
+    jq_init(bc, input, &jq, JQ_DEBUG_TRACE);
 
     while (fgets(buf, sizeof(buf), testdata)) {
       if (skipline(buf)) break;
       jv expected = jv_parse(buf);
       if (!jv_is_valid(expected)){ invalid++; continue; }
-      jv actual = jq_next();
+      jv actual = jq_next(jq);
       if (!jv_is_valid(actual)) {
         jv_free(actual);
         printf("*** Insufficient results\n");
@@ -80,7 +63,7 @@ static void run_jq_tests() {
         pass = 0;
       }
       jv as_string = jv_dump_string(jv_copy(expected), rand() & ~JV_PRINT_COLOUR);
-      jv reparsed = jv_parse_sized(jv_string_value(as_string), jv_string_length(jv_copy(as_string)));
+      jv reparsed = jv_parse_sized(jv_string_value(as_string), jv_string_length_bytes(jv_copy(as_string)));
       assert(jv_equal(jv_copy(expected), jv_copy(reparsed)));
       jv_free(as_string);
       jv_free(reparsed);
@@ -88,7 +71,7 @@ static void run_jq_tests() {
       jv_free(actual);
     }
     if (pass) {
-      jv extra = jq_next();
+      jv extra = jq_next(jq);
       if (jv_is_valid(extra)) {
         printf("*** Superfluous result: ");
         jv_dump(extra, 0);
@@ -98,7 +81,7 @@ static void run_jq_tests() {
         jv_free(extra);
       }
     }
-    jq_teardown();
+    jq_teardown(&jq);
     bytecode_free(bc);
     passed+=pass;
   }
@@ -132,9 +115,9 @@ static void jv_test() {
     jv_free(a2);
 
 
-    assert(a.val.complex.ptr->count == 1);
+    assert(a.val.nontrivial.ptr->count == 1);
     a = jv_array_append(a, jv_copy(a));
-    assert(a.val.complex.ptr->count == 1);
+    assert(a.val.nontrivial.ptr->count == 1);
 
     assert(jv_array_length(jv_copy(a)) == 2);
     assert(jv_number_value(jv_array_get(jv_copy(a), 0)) == 42);
@@ -167,9 +150,9 @@ static void jv_test() {
 
     jv_free(subarray);
 
-    void* before = sub2.val.complex.ptr;
+    void* before = sub2.val.nontrivial.ptr;
     sub2 = jv_array_append(sub2, jv_number(200));
-    void* after = sub2.val.complex.ptr;
+    void* after = sub2.val.nontrivial.ptr;
     assert(before == after);
     jv_free(sub2);
 
@@ -179,6 +162,18 @@ static void jv_test() {
     assert(jv_array_length(jv_array_get(jv_copy(a3), 1)) == 1);
     assert(jv_number_value(jv_array_get(jv_copy(a3), 2)) == 19);
     jv_free(a3);
+
+
+    jv a4 = jv_array();
+    a4 = jv_array_append(a4, jv_number(1));
+    a4 = jv_array_append(a4, jv_number(2));
+    jv a5 = jv_copy(a4);
+    a4 = jv_array_append(a4, jv_number(3));
+    a4 = jv_array_slice(a4, 0, 1);
+    assert(jv_array_length(jv_copy(a4)) == 1);
+    a4 = jv_array_append(a4, jv_number(4));
+    assert(jv_array_length(a4) == 2);
+    assert(jv_array_length(a5) == 2);
 
 
     assert(jv_array_length(jv_copy(a)) == 2);
@@ -196,8 +191,8 @@ static void jv_test() {
     assert(jv_equal(jv_string("foo"), jv_string_sized("foo", 3)));
     char nasty[] = "foo\0";
     jv shortstr = jv_string(nasty), longstr = jv_string_sized(nasty, sizeof(nasty));
-    assert(jv_string_length(shortstr) == (int)strlen(nasty));
-    assert(jv_string_length(longstr) == (int)sizeof(nasty));
+    assert(jv_string_length_bytes(shortstr) == (int)strlen(nasty));
+    assert(jv_string_length_bytes(longstr) == (int)sizeof(nasty));
 
   
     char a1s[] = "hello", a2s[] = "hello", bs[] = "goodbye";
@@ -218,7 +213,7 @@ static void jv_test() {
     for (int i=0; i<(int)sizeof(big); i++) big[i] = 'a';
     big[sizeof(big)-1] = 0;
     jv str = jv_string_fmt("%s", big);
-    assert(jv_string_length(jv_copy(str)) == sizeof(big) - 1);
+    assert(jv_string_length_bytes(jv_copy(str)) == sizeof(big) - 1);
     assert(!strcmp(big, jv_string_value(str)));
     jv_free(str);
   }

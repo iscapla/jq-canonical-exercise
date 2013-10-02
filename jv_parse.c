@@ -26,6 +26,8 @@ void jv_parser_init(struct jv_parser* p) {
   p->curr_buf = 0;
   p->curr_buf_length = p->curr_buf_pos = p->curr_buf_is_partial = 0;
   p->bom_strip_position = 0;
+  p->line = 1;
+  p->column = 0;
   jvp_dtoa_context_init(&p->dtoa);
 }
 
@@ -281,7 +283,7 @@ static chclass classify(char c) {
 }
 
 
-static presult OK = "output produced";
+static const presult OK = "output produced";
 
 static int check_done(struct jv_parser* p, jv* out) {
   if (p->stackpos == 0 && jv_is_valid(p->next)) {
@@ -294,6 +296,11 @@ static int check_done(struct jv_parser* p, jv* out) {
 }
 
 static pfunc scan(struct jv_parser* p, char ch, jv* out) {
+  p->column++;
+  if (ch == '\n') {
+    p->line++;
+    p->column = 0;
+  }
   presult answer = 0;
   if (p->st == JV_PARSER_NORMAL) {
     chclass cls = classify(ch);
@@ -334,7 +341,7 @@ static pfunc scan(struct jv_parser* p, char ch, jv* out) {
   return answer;
 }
 
-static unsigned char UTF8_BOM[] = {0xEF,0xBB,0xBF};
+static const unsigned char UTF8_BOM[] = {0xEF,0xBB,0xBF};
 
 void jv_parser_set_buf(struct jv_parser* p, const char* buf, int length, int is_partial) {
   assert((p->curr_buf == 0 || p->curr_buf_pos == p->curr_buf_length)
@@ -373,7 +380,7 @@ jv jv_parser_next(struct jv_parser* p) {
   if (msg == OK) {
     return value;
   } else if (msg) {
-    return jv_invalid_with_msg(jv_string(msg));
+    return jv_invalid_with_msg(jv_string_fmt("%s at line %d, column %d", msg, p->line, p->column));
   } else if (p->curr_buf_is_partial) {
     assert(p->curr_buf_pos == p->curr_buf_length);
     // need another buffer
