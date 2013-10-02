@@ -1,28 +1,29 @@
-Author: Simon Elsbrock <simon@iodev.org>
-Description: remove unneeded bonsai dependency, require yaml module
- .
- Removes a dependency that is not needed for the build process and also not
- available in Debian. Therefore, not forwarded.
-Last-Update: 2013-02-20
-Forwarded: not-needed
-
+Description: patch Rakefile to allow for easier manpage generation
+ This patch disable some of the dependencies that are not
+ required to build the actual manpage.
+Author: Simon Elsbrock
+Forwarded: no
 ---
-
 --- a/docs/Rakefile
 +++ b/docs/Rakefile
-@@ -1,6 +1,4 @@
+@@ -1,11 +1,6 @@
+ require 'yaml'
 -require 'bonsai'
 -require 'liquid'
 -require 'maruku'
-+require 'yaml'
- require 'json'
+-require 'json'
  require 'ronn'
  require 'tempfile'
-@@ -24,7 +22,6 @@ module ExtraFilters
+-require 'yaml'
+ 
+ module ExtraFilters
+   def markdownify(input)
+@@ -26,7 +21,7 @@
    end
  end
  
 -Liquid::Template.register_filter(ExtraFilters)
++#Liquid::Template.register_filter(ExtraFilters)
  
  
  task :serve do

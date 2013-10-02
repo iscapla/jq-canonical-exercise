@@ -1,6 +1,6 @@
 #!/usr/bin/make -f
 # -*- makefile -*-
-
+DH_VERBOSE=1
 export DEB_BUILD_MAINT_OPTIONS = hardening=+all
 DPKG_EXPORT_BUILDFLAGS = 1
 -include /usr/share/dpkg/buildflags.mk
@@ -13,5 +13,9 @@ endif
 get-orig-source:
 	uscan --force-download --rename --destdir .
 
+override_dh_auto_build:
+	$(MAKE)
+	$(MAKE) real_docs
+
 %:
-	dh $@
+	dh $@ --with autoreconf

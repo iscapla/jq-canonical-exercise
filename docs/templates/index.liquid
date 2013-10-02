@@ -18,7 +18,7 @@
               <ul class="dropdown-menu">
                 <li><a href="{{root}}/download/linux64/jq">Linux (64-bit)</a></li>
                 <li><a href="{{root}}/download/osx64/jq">OS X (64-bit)</a></li>
-                <li><a href="{{root}}/download">Other platforms and source</a></li>
+                <li><a href="{{root}}/download/">Other platforms and source</a></li>
               </ul>
             </div>
 
@@ -34,6 +34,16 @@
       </div>
       <div class="row" style="text-align:center; margin-top: 30px">
         {{tail | markdownify}}
+      </div>
+      <div class="row">
+        <h2>News</h2>
+        <div id="news">
+          <ul>
+            {% for item in news %}
+            <li><span class="date">{{ item.date | date: '%m %B %Y' }}</span>{{item.body | markdownify}}</li>
+            {% endfor %}
+          </ul>
+        </div>
       </div>
     </div>
     {% include "shared/footer" %}    

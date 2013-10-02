@@ -1,2 +1,3 @@
-makefile.patch
+initam.patch
 rakefile.patch
+makefile.patch
