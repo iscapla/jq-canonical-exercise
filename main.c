@@ -1,23 +1,21 @@
-#define _POSIX_SOURCE
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>
 #include <ctype.h>
 #include <unistd.h>
 #include "compile.h"
-#include "builtin.h"
 #include "jv.h"
 #include "jv_parse.h"
-#include "locfile.h"
-#include "parser.h"
 #include "execute.h"
+#include "config.h"  /* Autoconf generated header file */
 #include "jv_alloc.h"
-#include "version.gen.h"
+
+int jq_testsuite(int argc, char* argv[]);
 
 static const char* progname;
 
 static void usage() {
-  fprintf(stderr, "\njq - commandline JSON processor [version %s]\n", JQ_VERSION);
+  fprintf(stderr, "\njq - commandline JSON processor [version %s]\n", PACKAGE_VERSION);
   fprintf(stderr, "Usage: %s [options] <jq filter> [file...]\n\n", progname);
   fprintf(stderr, "For a description of the command line options and\n");
   fprintf(stderr, "how to write jq filters (and why you might want to)\n");
@@ -58,20 +56,27 @@ enum {
   NO_COLOUR_OUTPUT = 128,
 
   FROM_FILE = 256,
+
+  /* debugging only */
+  DUMP_DISASM = 2048,
 };
 static int options = 0;
 static struct bytecode* bc;
 
-static void process(jv value) {
-  jq_init(bc, value);
+static void process(jv value, int flags) {
+  jq_state *jq = NULL;
+  jq_init(bc, value, &jq, flags);
   jv result;
-  while (jv_is_valid(result = jq_next())) {
+  while (jv_is_valid(result = jq_next(jq))) {
     if ((options & RAW_OUTPUT) && jv_get_kind(result) == JV_KIND_STRING) {
-      fwrite(jv_string_value(result), 1, jv_string_length(jv_copy(result)), stdout);
+      fwrite(jv_string_value(result), 1, jv_string_length_bytes(jv_copy(result)), stdout);
+      jv_free(result);
     } else {
       int dumpopts;
-#ifdef JQ_DEFAULT_ENABLE_COLOR
-      dumpopts = JQ_DEFAULT_ENABLE_COLOR ? JV_PRINT_COLOUR : 0;
+      /* Disable colour by default on Windows builds as Windows
+         terminals tend not to display it correctly */
+#ifdef WIN32
+      dumpopts = 0;
 #else
       dumpopts = isatty(fileno(stdout)) ? JV_PRINT_COLOUR : 0;
 #endif
@@ -84,7 +89,7 @@ static void process(jv value) {
     printf("\n");
   }
   jv_free(result);
-  jq_teardown();
+  jq_teardown(&jq);
 }
 
 static jv slurp_file(const char* filename) {
@@ -134,17 +139,24 @@ static int read_more(char* buf, size_t size) {
     next_input_idx++;
   }
 
-  if (!fgets(buf, sizeof(buf), current_input)) buf[0] = 0;
+  if (!fgets(buf, size, current_input)) buf[0] = 0;
   return 1;
 }
 
 int main(int argc, char* argv[]) {
+  int ret = 0;
   if (argc) progname = argv[0];
+
+  if (argc > 1 && !strcmp(argv[1], "--run-tests")) {
+    return jq_testsuite(argc - 1, argv + 1);
+  }
 
   const char* program = 0;
   input_filenames = jv_mem_alloc(sizeof(const char*) * argc);
   ninput_files = 0;
   int further_args_are_files = 0;
+  int jq_flags = 0;
+  jv program_arguments = jv_array();
   for (int i=1; i<argc; i++) {
     if (further_args_are_files) {
       input_filenames[ninput_files++] = argv[i];
@@ -175,10 +187,24 @@ int main(int argc, char* argv[]) {
       options |= PROVIDE_NULL;
     } else if (isoption(argv[i], 'f', "from-file")) {
       options |= FROM_FILE;
+    } else if (isoption(argv[i], 0, "arg")) {
+      if (i >= argc - 2) {
+        fprintf(stderr, "%s: --arg takes two parameters (e.g. -a varname value)\n", progname);
+        die();
+      }
+      jv arg = jv_object();
+      arg = jv_object_set(arg, jv_string("name"), jv_string(argv[i+1]));
+      arg = jv_object_set(arg, jv_string("value"), jv_string(argv[i+2]));
+      program_arguments = jv_array_append(program_arguments, arg);
+      i += 2; // skip the next two arguments
+    } else if (isoption(argv[i],  0,  "debug-dump-disasm")) {
+      options |= DUMP_DISASM;
+    } else if (isoption(argv[i],  0,  "debug-trace")) {
+      jq_flags |= JQ_DEBUG_TRACE;
     } else if (isoption(argv[i], 'h', "help")) {
       usage();
     } else if (isoption(argv[i], 'V', "version")) {
-      fprintf(stderr, "jq version %s\n", JQ_VERSION);
+      fprintf(stderr, "jq version %s\n", PACKAGE_VERSION);
       return 0;
     } else {
       fprintf(stderr, "%s: Unknown option %s\n", progname, argv[i]);
@@ -201,20 +227,20 @@ int main(int argc, char* argv[]) {
       jv_free(data);
       return 1;
     }
-    bc = jq_compile(jv_string_value(data));
+    bc = jq_compile_args(jv_string_value(data), program_arguments);
     jv_free(data);
   } else {
-    bc = jq_compile(program);
+    bc = jq_compile_args(program, program_arguments);
   }
   if (!bc) return 1;
 
-#if JQ_DEBUG
-  dump_disassembly(0, bc);
-  printf("\n");
-#endif
+  if (options & DUMP_DISASM) {
+    dump_disassembly(0, bc);
+    printf("\n");
+  }
 
   if (options & PROVIDE_NULL) {
-    process(jv_null());
+    process(jv_null(), jq_flags);
   } else {
     jv slurped;
     if (options & SLURP) {
@@ -235,7 +261,7 @@ int main(int argc, char* argv[]) {
             slurped = jv_string_concat(slurped, jv_string(buf));
           } else {
             if (buf[len-1] == '\n') buf[len-1] = 0;
-            process(jv_string(buf));
+            process(jv_string(buf), jq_flags);
           }
         }
       } else {
@@ -245,13 +271,14 @@ int main(int argc, char* argv[]) {
           if (options & SLURP) {
             slurped = jv_array_append(slurped, value);
           } else {
-            process(value);
+            process(value, jq_flags);
           }
         }
         if (jv_invalid_has_msg(jv_copy(value))) {
           jv msg = jv_invalid_get_msg(value);
           fprintf(stderr, "parse error: %s\n", jv_string_value(msg));
           jv_free(msg);
+          ret = 1;
           break;
         } else {
           jv_free(value);
@@ -259,11 +286,14 @@ int main(int argc, char* argv[]) {
       }
     }
     jv_parser_free(&parser);
+    if (ret != 0)
+      goto out;
     if (options & SLURP) {
-      process(slurped);
+      process(slurped, jq_flags);
     }
   }
+out:
   jv_mem_free(input_filenames);
   bytecode_free(bc);
-  return 0;
+  return ret;
 }
