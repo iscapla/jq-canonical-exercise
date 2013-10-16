@@ -2,9 +2,11 @@ Source: jq
 Section: utils
 Priority: optional
 Maintainer: Simon Elsbrock <simon@iodev.org>
-Build-Depends: debhelper (>= 8.0.0), dh-autoreconf, flex, bison, valgrind, rake, ruby-ronn, 
+Build-Depends: debhelper (>= 8.0.0), dh-autoreconf, flex, bison, valgrind [linux-any], rake, ruby-ronn
 Standards-Version: 3.9.4
 Homepage: https://github.com/stedolan/jq
+Vcs-Git: git://anonscm.debian.org/users/else-guest/jq.git
+Vcs-Browser: http://anonscm.debian.org/gitweb/?p=users/else-guest/jq.git
 
 Package: jq
 Architecture: any
