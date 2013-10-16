@@ -2,7 +2,7 @@ Description: disable valgrind tests
  valgrind is not supported on certain architectures. This patch disables the valgrind
  tests on these architectures so that a build can succeed nonetheless.
 Author: Simon Elsbrock
-Forwarded: <URL|no|not-needed, useless if you have a Bug field, optional>
+Forwarded: https://github.com/stedolan/jq/pull/196
 --- a/tests/run
 +++ b/tests/run
 @@ -1,3 +1,3 @@
@@ -10,7 +10,7 @@ Forwarded: <URL|no|not-needed, useless if you have a Bug field, optional>
 -
 -cat $@ | valgrind --error-exitcode=1 -q --leak-check=full ./jq --run-tests
 \ No newline at end of file
-+uname -m | egrep -q 'x86_64|armel|mips|mipsel|powerpc|s390x' || exit 0
++uname -m | egrep -q 'armel|mips|mipsel|powerpc|s390x' && exit 0
 +cat $@ | valgrind --error-exitcode=1 -q --leak-check=full ./jq --run-tests
 --- a/configure.ac
 +++ b/configure.ac
