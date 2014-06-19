@@ -1,16 +1,16 @@
 %{
 #include <stdio.h>
 #include <string.h>
+#include <assert.h>
 #include "compile.h"
 #include "jv_alloc.h"
 #define YYMALLOC jv_mem_alloc
 #define YYFREE jv_mem_free
-
-struct lexer_param;
-
 %}
 %code requires {
 #include "locfile.h"
+struct lexer_param;
+
 #define YYLTYPE location
 #define YYLLOC_DEFAULT(Loc, Rhs, N)             \
   do {                                          \
@@ -47,8 +47,12 @@ struct lexer_param;
 
 %token INVALID_CHARACTER
 %token <literal> IDENT
+%token <literal> FIELD
 %token <literal> LITERAL
 %token <literal> FORMAT
+%token Q "?"
+%token REC ".."
+%token SETMOD "%="
 %token EQ "=="
 %token NEQ "!="
 %token DEFINEDOR "//"
@@ -82,12 +86,12 @@ struct lexer_param;
 %right '|'
 %left ','
 %right "//"
-%nonassoc '=' SETPIPE SETPLUS SETMINUS SETMULT SETDIV SETDEFINEDOR
+%nonassoc '=' SETPIPE SETPLUS SETMINUS SETMULT SETDIV SETMOD SETDEFINEDOR
 %left OR
 %left AND
 %nonassoc NEQ EQ '<' '>' LESSEQ GREATEREQ
 %left '+' '-'
-%left '*' '/'
+%left '*' '/' '%'
 
 
 %type <blk> Exp Term MkDict MkDictPair ExpD ElseBody QQString FuncDef FuncDefs String
@@ -112,25 +116,19 @@ void yyerror(YYLTYPE* loc, block* answer, int* errors,
 int yylex(YYSTYPE* yylval, YYLTYPE* yylloc, block* answer, int* errors, 
           struct locfile* locations, struct lexer_param* lexer_param_ptr) {
   yyscan_t lexer = lexer_param_ptr->lexer;
-  while (1) {
-    int tok = jq_yylex(yylval, yylloc, lexer);
-    if (tok == INVALID_CHARACTER) {
-      FAIL(*yylloc, "Invalid character");
+  int tok = jq_yylex(yylval, yylloc, lexer);
+  if ((tok == LITERAL || tok == QQSTRING_TEXT) && !jv_is_valid(yylval->literal)) {
+    jv msg = jv_invalid_get_msg(jv_copy(yylval->literal));
+    if (jv_get_kind(msg) == JV_KIND_STRING) {
+      FAIL(*yylloc, jv_string_value(msg));
     } else {
-      if ((tok == LITERAL || tok == QQSTRING_TEXT) && !jv_is_valid(yylval->literal)) {
-        jv msg = jv_invalid_get_msg(jv_copy(yylval->literal));
-        if (jv_get_kind(msg) == JV_KIND_STRING) {
-          FAIL(*yylloc, jv_string_value(msg));
-        } else {
-          FAIL(*yylloc, "Invalid literal");
-        }
-        jv_free(msg);
-        jv_free(yylval->literal);
-        yylval->literal = jv_null();
-      }
-      return tok;
+      FAIL(*yylloc, "Invalid literal");
     }
+    jv_free(msg);
+    jv_free(yylval->literal);
+    yylval->literal = jv_null();
   }
+  return tok;
 }
 
 static block gen_dictpair(block k, block v) {
@@ -141,7 +139,11 @@ static block gen_index(block obj, block key) {
   return BLOCK(gen_subexp(key), obj, gen_op_simple(INDEX));
 }
 
-static block gen_slice_index(block obj, block start, block end) {
+static block gen_index_opt(block obj, block key) {
+  return BLOCK(gen_subexp(key), obj, gen_op_simple(INDEX_OPT));
+}
+
+static block gen_slice_index(block obj, block start, block end, opcode idx_op) {
   block key = BLOCK(gen_subexp(gen_const(jv_object())),
                     gen_subexp(gen_const(jv_string("start"))),
                     gen_subexp(start),
@@ -149,7 +151,7 @@ static block gen_slice_index(block obj, block start, block end) {
                     gen_subexp(gen_const(jv_string("end"))),
                     gen_subexp(end),
                     gen_op_simple(INSERT));
-  return BLOCK(key, obj, gen_op_simple(INDEX));
+  return BLOCK(key, obj, gen_op_simple(idx_op));
 }
 
 static block gen_binop(block a, block b, int op) {
@@ -159,6 +161,7 @@ static block gen_binop(block a, block b, int op) {
   case '-': funcname = "_minus"; break;
   case '*': funcname = "_multiply"; break;
   case '/': funcname = "_divide"; break;
+  case '%': funcname = "_mod"; break;
   case EQ: funcname = "_equal"; break;
   case NEQ: funcname = "_notequal"; break;
   case '<': funcname = "_less"; break;
@@ -176,24 +179,22 @@ static block gen_format(block a, jv fmt) {
 }
 
 static block gen_definedor_assign(block object, block val) {
-  block tmp = block_bind(gen_op_var_unbound(STOREV, "tmp"),
-                         gen_noop(), OP_HAS_VARIABLE);
+  block tmp = gen_op_var_fresh(STOREV, "tmp");
   return BLOCK(gen_op_simple(DUP),
                val, tmp,
                gen_call("_modify", BLOCK(gen_lambda(object),
                                          gen_lambda(gen_definedor(gen_noop(), 
-                                                                  gen_op_var_bound(LOADV, tmp))))));
+                                                                  gen_op_bound(LOADV, tmp))))));
 }
  
 static block gen_update(block object, block val, int optype) {
-  block tmp = block_bind(gen_op_var_unbound(STOREV, "tmp"),
-                         gen_noop(), OP_HAS_VARIABLE);
+  block tmp = gen_op_var_fresh(STOREV, "tmp");
   return BLOCK(gen_op_simple(DUP),
                val,
                tmp,
                gen_call("_modify", BLOCK(gen_lambda(object), 
                                          gen_lambda(gen_binop(gen_noop(),
-                                                              gen_op_var_bound(LOADV, tmp),
+                                                              gen_op_bound(LOADV, tmp),
                                                               optype)))));
 }
 
@@ -234,8 +235,8 @@ Term "as" '$' IDENT '|' Exp {
 "if" Exp "then" Exp ElseBody {
   $$ = gen_cond($2, $4, $5);
 } |
-"if" Exp error {
-  FAIL(@$, "Possibly unterminated 'if' statment");
+"if" Exp "then" error {
+  FAIL(@$, "Possibly unterminated 'if' statement");
   $$ = $2;
 } |
 
@@ -303,8 +304,16 @@ Exp '/' Exp {
   $$ = gen_binop($1, $3, '/');
 } |
 
+Exp '%' Exp {
+  $$ = gen_binop($1, $3, '%');
+} |
+
 Exp "/=" Exp {
   $$ = gen_update($1, $3, '/');
+} |
+
+Exp SETMOD Exp {
+  $$ = gen_update($1, $3, '%');
 } |
 
 Exp "==" Exp {
@@ -343,7 +352,7 @@ FuncDef:
 
 "def" IDENT '(' IDENT ')' ':' Exp ';' {
   $$ = gen_function(jv_string_value($2), 
-                    gen_op_block_unbound(CLOSURE_PARAM, jv_string_value($4)), 
+                    gen_param(jv_string_value($4)), 
                     $7);
   jv_free($2);
   jv_free($4);
@@ -351,14 +360,73 @@ FuncDef:
 
 "def" IDENT '(' IDENT ';' IDENT ')' ':' Exp ';' {
   $$ = gen_function(jv_string_value($2), 
-                    BLOCK(gen_op_block_unbound(CLOSURE_PARAM, jv_string_value($4)), 
-                          gen_op_block_unbound(CLOSURE_PARAM, jv_string_value($6))),
+                    BLOCK(gen_param(jv_string_value($4)), 
+                          gen_param(jv_string_value($6))),
                     $9);
   jv_free($2);
   jv_free($4);
   jv_free($6);
-}
+} |
 
+"def" IDENT '(' IDENT ';' IDENT ';' IDENT ')' ':' Exp ';' {
+  $$ = gen_function(jv_string_value($2), 
+                    BLOCK(gen_param(jv_string_value($4)), 
+                          gen_param(jv_string_value($6)),
+                          gen_param(jv_string_value($8))),
+                    $11);
+  jv_free($2);
+  jv_free($4);
+  jv_free($6);
+  jv_free($8);
+} |
+
+"def" IDENT '(' IDENT ';' IDENT ';' IDENT ';' IDENT ')' ':' Exp ';' {
+  $$ = gen_function(jv_string_value($2), 
+                    BLOCK(gen_param(jv_string_value($4)), 
+                          gen_param(jv_string_value($6)),
+                          gen_param(jv_string_value($8)),
+                          gen_param(jv_string_value($10))),
+                    $13);
+  jv_free($2);
+  jv_free($4);
+  jv_free($6);
+  jv_free($8);
+  jv_free($10);
+} |
+
+"def" IDENT '(' IDENT ';' IDENT ';' IDENT ';' IDENT ';' IDENT ')' ':' Exp ';' {
+  $$ = gen_function(jv_string_value($2), 
+                    BLOCK(gen_param(jv_string_value($4)), 
+                          gen_param(jv_string_value($6)),
+                          gen_param(jv_string_value($8)),
+                          gen_param(jv_string_value($10)),
+                          gen_param(jv_string_value($12))),
+                    $15);
+  jv_free($2);
+  jv_free($4);
+  jv_free($6);
+  jv_free($8);
+  jv_free($10);
+  jv_free($12);
+} |
+
+"def" IDENT '(' IDENT ';' IDENT ';' IDENT ';' IDENT ';' IDENT ';' IDENT ')' ':' Exp ';' {
+  $$ = gen_function(jv_string_value($2), 
+                    BLOCK(gen_param(jv_string_value($4)), 
+                          gen_param(jv_string_value($6)),
+                          gen_param(jv_string_value($8)),
+                          gen_param(jv_string_value($10)),
+                          gen_param(jv_string_value($12)),
+                          gen_param(jv_string_value($14))),
+                    $17);
+  jv_free($2);
+  jv_free($4);
+  jv_free($6);
+  jv_free($8);
+  jv_free($10);
+  jv_free($12);
+  jv_free($14);
+}
 
 
 String:
@@ -396,7 +464,9 @@ ExpD:
 ExpD '|' ExpD { 
   $$ = block_join($1, $3);
 } |
-
+'-' ExpD {
+  $$ = BLOCK($2, gen_call("_negate", gen_noop()));
+} |
 Term {
   $$ = $1;
 }
@@ -406,27 +476,72 @@ Term:
 '.' {
   $$ = gen_noop(); 
 } |
-Term '.' IDENT {
-  $$ = gen_index($1, gen_const($3)); 
+REC {
+  $$ = gen_call("recurse_down", gen_noop());
 } |
-'.' IDENT { 
-  $$ = gen_index(gen_noop(), gen_const($2)); 
+Term FIELD '?' {
+  $$ = gen_index_opt($1, gen_const($2));
 } |
+FIELD '?' { 
+  $$ = gen_index_opt(gen_noop(), gen_const($1)); 
+} |
+Term '.' String '?' {
+  $$ = gen_index_opt($1, $3);
+} |
+'.' String '?' {
+  $$ = gen_index_opt(gen_noop(), $2);
+} |
+Term FIELD {
+  $$ = gen_index($1, gen_const($2));
+} |
+FIELD { 
+  $$ = gen_index(gen_noop(), gen_const($1)); 
+} |
+Term '.' String {
+  $$ = gen_index($1, $3);
+} |
+'.' String {
+  $$ = gen_index(gen_noop(), $2);
+} |
+'.' error {
+  FAIL(@$, "try .[\"field\"] instead of .field for unusually named fields");
+  $$ = gen_noop();
+} |
+'.' IDENT error {
+  jv_free($2);
+  FAIL(@$, "try .[\"field\"] instead of .field for unusually named fields");
+  $$ = gen_noop();
+} | 
 /* FIXME: string literals */
+Term '[' Exp ']' '?' {
+  $$ = gen_index_opt($1, $3); 
+} |
 Term '[' Exp ']' {
   $$ = gen_index($1, $3); 
+} |
+Term '[' ']' '?' {
+  $$ = block_join($1, gen_op_simple(EACH_OPT)); 
 } |
 Term '[' ']' {
   $$ = block_join($1, gen_op_simple(EACH)); 
 } |
+Term '[' Exp ':' Exp ']' '?' {
+  $$ = gen_slice_index($1, $3, $5, INDEX_OPT);
+} |
+Term '[' Exp ':' ']' '?' {
+  $$ = gen_slice_index($1, $3, gen_const(jv_null()), INDEX_OPT);
+} |
+Term '[' ':' Exp ']' '?' {
+  $$ = gen_slice_index($1, gen_const(jv_null()), $4, INDEX_OPT);
+} |
 Term '[' Exp ':' Exp ']' {
-  $$ = gen_slice_index($1, $3, $5);
+  $$ = gen_slice_index($1, $3, $5, INDEX);
 } |
 Term '[' Exp ':' ']' {
-  $$ = gen_slice_index($1, $3, gen_const(jv_null()));
+  $$ = gen_slice_index($1, $3, gen_const(jv_null()), INDEX);
 } |
 Term '[' ':' Exp ']' {
-  $$ = gen_slice_index($1, gen_const(jv_null()), $4);
+  $$ = gen_slice_index($1, gen_const(jv_null()), $4, INDEX);
 } |
 LITERAL {
   $$ = gen_const($1); 
@@ -450,7 +565,7 @@ FORMAT {
   $$ = BLOCK(gen_subexp(gen_const(jv_object())), $2, gen_op_simple(POP));
 } |
 '$' IDENT {
-  $$ = gen_location(@$, gen_op_var_unbound(LOADV, jv_string_value($2)));
+  $$ = gen_location(@$, gen_op_unbound(LOADV, jv_string_value($2)));
   jv_free($2);
 } | 
 IDENT {
@@ -464,6 +579,26 @@ IDENT '(' Exp ')' {
 } |
 IDENT '(' Exp ';' Exp ')' {
   $$ = gen_call(jv_string_value($1), BLOCK(gen_lambda($3), gen_lambda($5)));
+  $$ = gen_location(@1, $$);
+  jv_free($1);
+} |
+IDENT '(' Exp ';' Exp ';' Exp ')' {
+  $$ = gen_call(jv_string_value($1), BLOCK(gen_lambda($3), gen_lambda($5), gen_lambda($7)));
+  $$ = gen_location(@1, $$);
+  jv_free($1);
+} |
+IDENT '(' Exp ';' Exp ';' Exp ';' Exp ')' {
+  $$ = gen_call(jv_string_value($1), BLOCK(gen_lambda($3), gen_lambda($5), gen_lambda($7), gen_lambda($9)));
+  $$ = gen_location(@1, $$);
+  jv_free($1);
+} |
+IDENT '(' Exp ';' Exp ';' Exp ';' Exp ';' Exp ')' {
+  $$ = gen_call(jv_string_value($1), BLOCK(gen_lambda($3), gen_lambda($5), gen_lambda($7), gen_lambda($9), gen_lambda($11)));
+  $$ = gen_location(@1, $$);
+  jv_free($1);
+} |
+IDENT '(' Exp ';' Exp ';' Exp ';' Exp ';' Exp ';' Exp ')' {
+  $$ = gen_call(jv_string_value($1), BLOCK(gen_lambda($3), gen_lambda($5), gen_lambda($7), gen_lambda($9), gen_lambda($11), gen_lambda($13)));
   $$ = gen_location(@1, $$);
   jv_free($1);
 } |

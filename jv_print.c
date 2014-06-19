@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <float.h>
 #include <string.h>
+#include <assert.h>
 
 #include "jv_dtoa.h"
 #include "jv_unicode.h"
@@ -194,7 +195,34 @@ static void jv_dump_term(struct dtoa_context* C, jv x, int flags, int indent, FI
       put_space(indent+INDENT, F, S);
     }
     int first = 1;
-    jv_object_foreach(x, key, value) {
+    int i = 0;
+    jv keyset = jv_null();
+    while (1) {
+      jv key, value;
+      if (flags & JV_PRINT_SORTED) {
+        if (first) {
+          keyset = jv_keys(jv_copy(x));
+          i = 0;
+        } else {
+          i++;
+        }
+        if (i >= jv_array_length(jv_copy(keyset))) {
+          jv_free(keyset);
+          break;
+        }
+        key = jv_array_get(jv_copy(keyset), i);
+        value = jv_object_get(jv_copy(x), jv_copy(key));
+      } else {
+        if (first) {
+          i = jv_object_iter(x);
+        } else {
+          i = jv_object_iter_next(x, i);
+        }
+        if (!jv_object_iter_valid(x, i)) break;
+        key = jv_object_iter_key(x, i);
+        value = jv_object_iter_value(x, i);
+      }
+
       if (!first) {
         if (flags & JV_PRINT_PRETTY){
           put_str(",\n", F, S);
@@ -232,11 +260,22 @@ static void jv_dump_term(struct dtoa_context* C, jv x, int flags, int indent, FI
   }
 }
 
-void jv_dump(jv x, int flags) {
+void jv_dumpf(jv x, FILE *f, int flags) {
   struct dtoa_context C;
   jvp_dtoa_context_init(&C);
-  jv_dump_term(&C, x, flags, 0, stdout, 0);
+  jv_dump_term(&C, x, flags, 0, f, 0);
   jvp_dtoa_context_free(&C);
+}
+
+void jv_dump(jv x, int flags) {
+  jv_dumpf(x, stdout, flags);
+}
+
+void jv_show(jv x, int flags) {
+  if (flags == -1)
+    flags = JV_PRINT_PRETTY | JV_PRINT_COLOUR;
+  jv_dumpf(jv_copy(x), stderr, flags);
+  fflush(stderr);
 }
 
 jv jv_dump_string(jv x, int flags) {

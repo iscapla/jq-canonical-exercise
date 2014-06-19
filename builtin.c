@@ -1,28 +1,14 @@
+#include <math.h>
+#include <stdlib.h>
 #include <string.h>
+#include <assert.h>
 #include "builtin.h"
 #include "compile.h"
 #include "jq_parser.h"
+#include "bytecode.h"
 #include "locfile.h"
-#include "jv_aux.h"
 #include "jv_unicode.h"
 
-
-
-typedef jv (*func_1)(jv);
-typedef jv (*func_2)(jv,jv);
-typedef jv (*func_3)(jv,jv,jv);
-typedef jv (*func_4)(jv,jv,jv,jv);
-typedef jv (*func_5)(jv,jv,jv,jv,jv);
-jv cfunction_invoke(struct cfunction* function, jv input[]) {
-  switch (function->nargs) {
-  case 1: return ((func_1)function->fptr)(input[0]);
-  case 2: return ((func_2)function->fptr)(input[0], input[1]);
-  case 3: return ((func_3)function->fptr)(input[0], input[1], input[2]);
-  case 4: return ((func_4)function->fptr)(input[0], input[1], input[2], input[3]);
-  case 5: return ((func_5)function->fptr)(input[0], input[1], input[2], input[3], input[4]);
-  default: return jv_invalid_with_msg(jv_string("Function takes too many arguments"));
-  }
-}
 
 static jv type_error(jv bad, const char* msg) {
   jv err = jv_invalid_with_msg(jv_string_fmt("%s %s",
@@ -64,6 +50,18 @@ static jv f_plus(jv input, jv a, jv b) {
   }
 }
 
+#define LIBM_DD(name) \
+static jv f_ ## name(jv input) { \
+  if (jv_get_kind(input) != JV_KIND_NUMBER) { \
+    return type_error(input, "number required"); \
+  } \
+  jv ret = jv_number(name(jv_number_value(input))); \
+  jv_free(input); \
+  return ret; \
+}
+#include "libm.h"
+#undef LIBM_DD
+
 static jv f_negate(jv input) {
   if (jv_get_kind(input) != JV_KIND_NUMBER) {
     return type_error(input, "cannot be negated");
@@ -71,6 +69,64 @@ static jv f_negate(jv input) {
   jv ret = jv_number(-jv_number_value(input));
   jv_free(input);
   return ret;
+}
+
+static jv f_startswith(jv a, jv b) {
+  int alen = jv_string_length_bytes(jv_copy(a));
+  int blen = jv_string_length_bytes(jv_copy(b));
+  jv ret;
+
+  if (blen <= alen && memcmp(jv_string_value(a), jv_string_value(b), blen) == 0)
+    ret = jv_true();
+  else
+    ret = jv_false();
+  jv_free(a);
+  jv_free(b);
+  return ret;
+}
+
+static jv f_endswith(jv a, jv b) {
+  const char *astr = jv_string_value(a);
+  const char *bstr = jv_string_value(b);
+  size_t alen = jv_string_length_bytes(jv_copy(a));
+  size_t blen = jv_string_length_bytes(jv_copy(b));
+  jv ret;;
+
+  if (alen < blen ||
+     memcmp(astr + (alen - blen), bstr, blen) != 0)
+    ret = jv_false();
+  else
+    ret = jv_true();
+  jv_free(a);
+  jv_free(b);
+  return ret;
+}
+
+static jv f_ltrimstr(jv input, jv left) {
+  if (jv_get_kind(f_startswith(jv_copy(input), jv_copy(left))) != JV_KIND_TRUE) {
+    jv_free(left);
+    return input;
+  }
+  /*
+   * FIXME It'd be better to share the suffix with the original input --
+   * that we could do, we just can't share prefixes.
+   */
+  int prefixlen = jv_string_length_bytes(left);
+  jv res = jv_string_sized(jv_string_value(input) + prefixlen,
+                           jv_string_length_bytes(jv_copy(input)) - prefixlen);
+  jv_free(input);
+  return res;
+}
+
+static jv f_rtrimstr(jv input, jv right) {
+  if (jv_get_kind(f_endswith(jv_copy(input), jv_copy(right))) == JV_KIND_TRUE) {
+    jv res = jv_string_sized(jv_string_value(input),
+                             jv_string_length_bytes(jv_copy(input)) - jv_string_length_bytes(right));
+    jv_free(input);
+    return res;
+  }
+  jv_free(right);
+  return input;
 }
 
 static jv f_minus(jv input, jv a, jv b) {
@@ -100,9 +156,34 @@ static jv f_minus(jv input, jv a, jv b) {
 }
 
 static jv f_multiply(jv input, jv a, jv b) {
+  jv_kind ak = jv_get_kind(a);
+  jv_kind bk = jv_get_kind(b);
   jv_free(input);
-  if (jv_get_kind(a) == JV_KIND_NUMBER && jv_get_kind(b) == JV_KIND_NUMBER) {
+  if (ak == JV_KIND_NUMBER && bk == JV_KIND_NUMBER) {
     return jv_number(jv_number_value(a) * jv_number_value(b));
+  } else if ((ak == JV_KIND_STRING && bk == JV_KIND_NUMBER) ||
+             (ak == JV_KIND_NUMBER && bk == JV_KIND_STRING)) {
+    jv str = a;
+    jv num = b;
+    if (ak == JV_KIND_NUMBER) {
+      str = b;
+      num = a;
+    }
+    int n;
+    size_t alen = jv_string_length_bytes(jv_copy(str));
+    jv res = str;
+
+    for (n = jv_number_value(num) - 1; n > 0; n--)
+      res = jv_string_append_buf(res, jv_string_value(str), alen);
+
+    jv_free(num);
+    if (n < 0) {
+      jv_free(str);
+      return jv_null();
+    }
+    return res;
+  } else if (ak == JV_KIND_OBJECT && bk == JV_KIND_OBJECT) {
+    return jv_object_merge_recursive(a, b);
   } else {
     return type_error2(a, b, "cannot be multiplied");
   }  
@@ -112,6 +193,17 @@ static jv f_divide(jv input, jv a, jv b) {
   jv_free(input);
   if (jv_get_kind(a) == JV_KIND_NUMBER && jv_get_kind(b) == JV_KIND_NUMBER) {
     return jv_number(jv_number_value(a) / jv_number_value(b));
+  } else if (jv_get_kind(a) == JV_KIND_STRING && jv_get_kind(b) == JV_KIND_STRING) {
+    return jv_string_split(a, b);
+  } else {
+    return type_error2(a, b, "cannot be divided");
+  }  
+}
+
+static jv f_mod(jv input, jv a, jv b) {
+  jv_free(input);
+  if (jv_get_kind(a) == JV_KIND_NUMBER && jv_get_kind(b) == JV_KIND_NUMBER) {
+    return jv_number((intmax_t)jv_number_value(a) % (intmax_t)jv_number_value(b));
   } else {
     return type_error2(a, b, "cannot be divided");
   }  
@@ -167,6 +259,19 @@ static jv f_contains(jv a, jv b) {
   }
 }
 
+static jv f_dump(jv input) {
+  return jv_dump_string(input, 0);
+}
+
+static jv f_json_parse(jv input) {
+  if (jv_get_kind(input) != JV_KIND_STRING)
+    return type_error(input, "only strings can be parsed");
+  jv res = jv_parse_sized(jv_string_value(input),
+                          jv_string_length_bytes(jv_copy(input)));
+  jv_free(input);
+  return res;
+}
+
 static jv f_tonumber(jv input) {
   if (jv_get_kind(input) == JV_KIND_NUMBER) {
     return input;
@@ -188,6 +293,8 @@ static jv f_length(jv input) {
     return jv_number(jv_object_length(input));
   } else if (jv_get_kind(input) == JV_KIND_STRING) {
     return jv_number(jv_string_length_codepoints(input));
+  } else if (jv_get_kind(input) == JV_KIND_NUMBER) {
+    return jv_number(fabs(jv_number_value(input)));
   } else if (jv_get_kind(input) == JV_KIND_NULL) {
     jv_free(input);
     return jv_number(0);
@@ -468,15 +575,29 @@ static jv f_error(jv input, jv msg) {
   return jv_invalid_with_msg(msg);
 }
 
+#define LIBM_DD(name) \
+  {(cfunction_ptr)f_ ## name, "_" #name, 1},
+   
 static const struct cfunction function_list[] = {
+#include "libm.h"
   {(cfunction_ptr)f_plus, "_plus", 3},
   {(cfunction_ptr)f_negate, "_negate", 1},
   {(cfunction_ptr)f_minus, "_minus", 3},
   {(cfunction_ptr)f_multiply, "_multiply", 3},
   {(cfunction_ptr)f_divide, "_divide", 3},
+  {(cfunction_ptr)f_mod, "_mod", 3},
+  {(cfunction_ptr)f_dump, "tojson", 1},
+  {(cfunction_ptr)f_json_parse, "fromjson", 1},
   {(cfunction_ptr)f_tonumber, "tonumber", 1},
   {(cfunction_ptr)f_tostring, "tostring", 1},
   {(cfunction_ptr)f_keys, "keys", 1},
+  {(cfunction_ptr)f_startswith, "startswith", 2},
+  {(cfunction_ptr)f_endswith, "endswith", 2},
+  {(cfunction_ptr)f_ltrimstr, "ltrimstr", 2},
+  {(cfunction_ptr)f_rtrimstr, "rtrimstr", 2},
+  {(cfunction_ptr)jv_string_split, "split", 2},
+  {(cfunction_ptr)jv_string_explode, "explode", 1},
+  {(cfunction_ptr)jv_string_implode, "implode", 1},
   {(cfunction_ptr)jv_setpath, "setpath", 3}, // FIXME typechecking
   {(cfunction_ptr)jv_getpath, "getpath", 2},
   {(cfunction_ptr)jv_delpaths, "delpaths", 2},
@@ -500,6 +621,7 @@ static const struct cfunction function_list[] = {
   {(cfunction_ptr)f_error, "error", 2},
   {(cfunction_ptr)f_format, "format", 2},
 };
+#undef LIBM_DD
 
 struct bytecoded_builtin { const char* name; block code; };
 static block bind_bytecoded_builtins(block b) {
@@ -526,25 +648,25 @@ static block bind_bytecoded_builtins(block b) {
     };
     for (unsigned i=0; i<sizeof(builtin_def_1arg)/sizeof(builtin_def_1arg[0]); i++) {
       builtins = BLOCK(builtins, gen_function(builtin_def_1arg[i].name,
-                                              gen_op_block_unbound(CLOSURE_PARAM, "arg"),
+                                              gen_param("arg"),
                                               builtin_def_1arg[i].code));
     }
   }
   {
-    block rangevar = block_bind(gen_op_var_unbound(STOREV, "rangevar"),
-                                gen_noop(), OP_HAS_VARIABLE);
+    block rangevar = gen_op_var_fresh(STOREV, "rangevar");
     block init = BLOCK(gen_op_simple(DUP), gen_call("start", gen_noop()), rangevar);
     block range = BLOCK(init, 
                         gen_call("end", gen_noop()),
-                        gen_op_var_bound(RANGE, rangevar));
+                        gen_op_bound(RANGE, rangevar));
     builtins = BLOCK(builtins, gen_function("range",
-                                            BLOCK(gen_op_block_unbound(CLOSURE_PARAM, "start"),
-                                                  gen_op_block_unbound(CLOSURE_PARAM, "end")),
+                                            BLOCK(gen_param("start"), gen_param("end")),
                                             range));
   }
   
   return block_bind_referenced(builtins, b, OP_IS_CALL_PSEUDO);
 }
+
+#define LIBM_DD(name) "def " #name ": _" #name ";",
 
 static const char* const jq_builtins[] = {
   "def map(f): [.[] | f];",
@@ -552,30 +674,79 @@ static const char* const jq_builtins[] = {
   "def sort_by(f): _sort_by_impl(map([f]));",
   "def group_by(f): _group_by_impl(map([f]));",
   "def unique: group_by(.) | map(.[0]);",
+  "def unique_by(f): group_by(f) | map(.[0]);",
   "def max_by(f): _max_by_impl(map([f]));",
   "def min_by(f): _min_by_impl(map([f]));",
+#include "libm.h"
   "def add: reduce .[] as $x (null; . + $x);",
   "def del(f): delpaths([path(f)]);",
   "def _assign(paths; value): value as $v | reduce path(paths) as $p (.; setpath($p; $v));",
   "def _modify(paths; update): reduce path(paths) as $p (.; setpath($p; getpath($p) | update));",
   "def recurse(f): ., (f | select(. != null) | recurse(f));",
+  "def recurse_down: recurse(.[]?);",
   "def to_entries: [keys[] as $k | {key: $k, value: .[$k]}];",
   "def from_entries: map({(.key): .value}) | add;",
   "def with_entries(f): to_entries | map(f) | from_entries;",
   "def reverse: [.[length - 1 - range(0;length)]];",
+  "def indices(i): if type == \"array\" and (i|type) == \"array\" then .[i] elif type == \"array\" then .[[i]] else .[i] end;",
+  "def index(i):   if type == \"array\" and (i|type) == \"array\" then .[i] elif type == \"array\" then .[[i]] else .[i] end | .[0];",
+  "def rindex(i):  if type == \"array\" and (i|type) == \"array\" then .[i] elif type == \"array\" then .[[i]] else .[i] end | .[-1:][0];",
+  "def paths: path(recurse(if (type|. == \"array\" or . == \"object\") then .[] else empty end))|select(length > 0);",
+  "def leaf_paths: . as $dot|paths|select(. as $p|$dot|getpath($p)|type|. != \"array\" and . != \"object\");",
+  "def any: reduce .[] as $i (false; . or $i);",
+  "def all: reduce .[] as $i (true; . and $i);",
+  "def arrays: select(type == \"array\");",
+  "def objects: select(type == \"object\");",
+  "def iterables: arrays, objects;",
+  "def booleans: select(type == \"boolean\");",
+  "def numbers: select(type == \"number\");",
+  "def strings: select(type == \"string\");",
+  "def nulls: select(type == \"null\");",
+  "def values: arrays, objects, booleans, numbers, strings;",
+  "def scalars: select(. == null or . == true or . == false or type == \"number\" or type == \"string\");",
+  "def join(x): reduce .[] as $i (\"\"; . + (if . == \"\" then $i else x + $i end));",
 };
+#undef LIBM_DD
 
 
-block builtins_bind(block b) {
-  for (int i=(int)(sizeof(jq_builtins)/sizeof(jq_builtins[0]))-1; i>=0; i--) {
-    struct locfile src;
-    locfile_init(&src, jq_builtins[i], strlen(jq_builtins[i]));
-    block funcs;
-    int nerrors = jq_parse_library(&src, &funcs);
-    assert(!nerrors);
-    b = block_bind_referenced(funcs, b, OP_IS_CALL_PSEUDO);
-    locfile_free(&src);
+static int builtins_bind_one(jq_state *jq, block* bb, const char* code) {
+  struct locfile src;
+  locfile_init(&src, jq, code, strlen(code));
+  block funcs;
+  int nerrors = jq_parse_library(&src, &funcs);
+  if (nerrors == 0) {
+    *bb = block_bind_referenced(funcs, *bb, OP_IS_CALL_PSEUDO);
   }
-  b = bind_bytecoded_builtins(b);
-  return gen_cbinding(function_list, sizeof(function_list)/sizeof(function_list[0]), b);
+  locfile_free(&src);
+  return nerrors;
+}
+
+static int slurp_lib(jq_state *jq, block* bb) {
+  int nerrors = 0;
+  char* home = getenv("HOME");
+  if (home) {    // silently ignore no $HOME
+    jv filename = jv_string_append_str(jv_string(home), "/.jq");
+    jv data = jv_load_file(jv_string_value(filename), 1);
+    if (jv_is_valid(data)) {
+      nerrors = builtins_bind_one(jq, bb, jv_string_value(data) );
+    }
+    jv_free(filename);
+    jv_free(data);
+  }
+  return nerrors;
+}
+
+int builtins_bind(jq_state *jq, block* bb) {
+  int nerrors = slurp_lib(jq, bb);
+  if (nerrors) {
+    block_free(*bb);
+    return nerrors;
+  }
+  for (int i=(int)(sizeof(jq_builtins)/sizeof(jq_builtins[0]))-1; i>=0; i--) {
+    nerrors = builtins_bind_one(jq, bb, jq_builtins[i]);
+    assert(!nerrors);
+  }
+  *bb = bind_bytecoded_builtins(*bb);
+  *bb = gen_cbinding(function_list, sizeof(function_list)/sizeof(function_list[0]), *bb);
+  return nerrors;
 }

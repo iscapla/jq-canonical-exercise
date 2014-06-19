@@ -3,15 +3,23 @@
 #include <string.h>
 #include <stdlib.h>
 #include "jv.h"
-#include "execute.h"
+#include "jq.h"
 
 static void jv_test();
 static void run_jq_tests();
 
 
 int jq_testsuite(int argc, char* argv[]) {
+  FILE *testdata = stdin;
   jv_test();
-  run_jq_tests(stdin);
+  if (argc > 2) {
+    testdata = fopen(argv[2], "r");
+    if (!testdata) {
+      perror("fopen");
+      exit(1);
+    }
+  }
+  run_jq_tests(testdata);
   return 0;
 }
 
@@ -27,6 +35,9 @@ static void run_jq_tests(FILE *testdata) {
   int tests = 0, passed = 0, invalid = 0;
   jq_state *jq = NULL;
 
+  jq = jq_init();
+  assert(jq);
+
   while (1) {
     if (!fgets(buf, sizeof(buf), testdata)) break;
     if (skipline(buf)) continue;
@@ -34,15 +45,15 @@ static void run_jq_tests(FILE *testdata) {
     printf("Testing %s\n", buf);
     int pass = 1;
     tests++;
-    struct bytecode* bc = jq_compile(buf);
-    if (!bc) {invalid++; continue;}
+    int compiled = jq_compile(jq, buf);
+    if (!compiled) {invalid++; continue;}
     printf("Disassembly:\n");
-    dump_disassembly(2, bc);
+    jq_dump_disassembly(jq, 2);
     printf("\n");
-    fgets(buf, sizeof(buf), testdata);
+    if (!fgets(buf, sizeof(buf), testdata)) { invalid++; break; }
     jv input = jv_parse(buf);
     if (!jv_is_valid(input)){ invalid++; continue; }
-    jq_init(bc, input, &jq, JQ_DEBUG_TRACE);
+    jq_start(jq, input, JQ_DEBUG_TRACE);
 
     while (fgets(buf, sizeof(buf), testdata)) {
       if (skipline(buf)) break;
@@ -81,10 +92,9 @@ static void run_jq_tests(FILE *testdata) {
         jv_free(extra);
       }
     }
-    jq_teardown(&jq);
-    bytecode_free(bc);
     passed+=pass;
   }
+  jq_teardown(&jq);
   printf("%d of %d tests passed (%d malformed)\n", passed,tests,invalid);
   if (passed != tests) exit(1);
 }
@@ -115,9 +125,9 @@ static void jv_test() {
     jv_free(a2);
 
 
-    assert(a.val.nontrivial.ptr->count == 1);
+    assert(jv_get_refcnt(a) == 1);
     a = jv_array_append(a, jv_copy(a));
-    assert(a.val.nontrivial.ptr->count == 1);
+    assert(jv_get_refcnt(a) == 1);
 
     assert(jv_array_length(jv_copy(a)) == 2);
     assert(jv_number_value(jv_array_get(jv_copy(a), 0)) == 42);
@@ -150,9 +160,9 @@ static void jv_test() {
 
     jv_free(subarray);
 
-    void* before = sub2.val.nontrivial.ptr;
+    void* before = sub2.u.ptr;
     sub2 = jv_array_append(sub2, jv_number(200));
-    void* after = sub2.val.nontrivial.ptr;
+    void* after = sub2.u.ptr;
     assert(before == after);
     jv_free(sub2);
 
@@ -172,8 +182,10 @@ static void jv_test() {
     a4 = jv_array_slice(a4, 0, 1);
     assert(jv_array_length(jv_copy(a4)) == 1);
     a4 = jv_array_append(a4, jv_number(4));
-    assert(jv_array_length(a4) == 2);
-    assert(jv_array_length(a5) == 2);
+    assert(jv_array_length(jv_copy(a4)) == 2);
+    assert(jv_array_length(jv_copy(a5)) == 2);
+    jv_free(a4);
+    jv_free(a5);
 
 
     assert(jv_array_length(jv_copy(a)) == 2);
@@ -191,8 +203,10 @@ static void jv_test() {
     assert(jv_equal(jv_string("foo"), jv_string_sized("foo", 3)));
     char nasty[] = "foo\0";
     jv shortstr = jv_string(nasty), longstr = jv_string_sized(nasty, sizeof(nasty));
-    assert(jv_string_length_bytes(shortstr) == (int)strlen(nasty));
-    assert(jv_string_length_bytes(longstr) == (int)sizeof(nasty));
+    assert(jv_string_length_bytes(jv_copy(shortstr)) == (int)strlen(nasty));
+    assert(jv_string_length_bytes(jv_copy(longstr)) == (int)sizeof(nasty));
+    jv_free(shortstr);
+    jv_free(longstr);
 
   
     char a1s[] = "hello", a2s[] = "hello", bs[] = "goodbye";
@@ -237,5 +251,12 @@ static void jv_test() {
     jv_dump(jv_copy(o2), 0); printf("\n");
 
     jv_free(o2);
+  }
+
+  /// Compile errors
+  {
+    jq_state *jq = jq_init();
+    jq_compile_args(jq, "}", jv_array());
+    jq_teardown(&jq);
   }
 }

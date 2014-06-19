@@ -1,17 +1,21 @@
-#include "jv_aux.h"
 #include <string.h>
 #include <stdlib.h>
+#include <assert.h>
 #include "jv_alloc.h"
 
-static int parse_slice(jv array, jv slice, int* pstart, int* pend) {
+static int parse_slice(jv j, jv slice, int* pstart, int* pend) {
   // Array slices
-  int len = jv_array_length(jv_copy(array));
   jv start_jv = jv_object_get(jv_copy(slice), jv_string("start"));
   jv end_jv = jv_object_get(slice, jv_string("end"));
   if (jv_get_kind(start_jv) == JV_KIND_NULL) {
     jv_free(start_jv);
     start_jv = jv_number(0);
   }
+  int len;
+  if (jv_get_kind(j) == JV_KIND_ARRAY)
+    len = jv_array_length(jv_copy(j));
+  else
+    len = jv_string_length_codepoints(jv_copy(j));
   if (jv_get_kind(end_jv) == JV_KIND_NULL) {
     jv_free(end_jv);
     end_jv = jv_number(len);
@@ -22,13 +26,18 @@ static int parse_slice(jv array, jv slice, int* pstart, int* pend) {
     jv_free(end_jv);
     return 0;
   } else {
-    int start = (int)jv_number_value(start_jv);
-    int end = (int)jv_number_value(end_jv);
-    if (start < 0) start = len + start;
-    if (end < 0) end = len + end;
+    double dstart = jv_number_value(start_jv);
+    double dend = jv_number_value(end_jv);
+    if (dstart < 0) dstart += len;
+    if (dend < 0) dend += len;
+    if (dstart < 0) dstart = 0;
+    if (dstart > len) dstart = len;
 
-    if (start < 0) start = 0;
-    if (start > len) start = len;
+    int start = (int)dstart;
+    int end = (dend > len) ? len : (int)dend;
+    // Ends are exclusive but e.g. 1 < 1.5 so :1.5 should be :2 not :1
+    if(end < dend) end += 1;
+
     if (end > len) end = len;
     if (end < start) end = start;
     assert(0 <= start && start <= end && end <= len);
@@ -47,10 +56,15 @@ jv jv_get(jv t, jv k) {
       v = jv_null();
     }
   } else if (jv_get_kind(t) == JV_KIND_ARRAY && jv_get_kind(k) == JV_KIND_NUMBER) {
-    // FIXME: don't do lookup for noninteger index
-    v = jv_array_get(t, (int)jv_number_value(k));
-    if (!jv_is_valid(v)) {
-      jv_free(v);
+    if(jv_is_integer(k)){
+      v = jv_array_get(t, (int)jv_number_value(k));
+      if (!jv_is_valid(v)) {
+        jv_free(v);
+        v = jv_null();
+      }
+    } else {
+      jv_free(t);
+      jv_free(k);
       v = jv_null();
     }
   } else if (jv_get_kind(t) == JV_KIND_ARRAY && jv_get_kind(k) == JV_KIND_OBJECT) {
@@ -61,6 +75,18 @@ jv jv_get(jv t, jv k) {
       v = jv_invalid_with_msg(jv_string_fmt("Start and end indices of an array slice must be numbers"));
       jv_free(t);
     }
+  } else if (jv_get_kind(t) == JV_KIND_STRING && jv_get_kind(k) == JV_KIND_OBJECT) {
+    int start, end;
+    if (parse_slice(t, k, &start, &end)) {
+      v = jv_string_slice(t, start, end);
+    } else {
+      v = jv_invalid_with_msg(jv_string_fmt("Start and end indices of an string slice must be numbers"));
+      jv_free(t);
+    }
+  } else if (jv_get_kind(t) == JV_KIND_STRING && jv_get_kind(k) == JV_KIND_STRING) {
+    v = jv_string_indexes(t, k);
+  } else if (jv_get_kind(t) == JV_KIND_ARRAY && jv_get_kind(k) == JV_KIND_ARRAY) {
+    v = jv_array_indexes(t, k);
   } else if (jv_get_kind(t) == JV_KIND_NULL && 
              (jv_get_kind(k) == JV_KIND_STRING || 
               jv_get_kind(k) == JV_KIND_NUMBER || 
@@ -545,21 +571,23 @@ jv jv_group(jv objects, jv keys) {
   int n = jv_array_length(jv_copy(objects));
   struct sort_entry* entries = sort_items(objects, keys);
   jv ret = jv_array();
-  jv curr_key = entries[0].key;
-  jv group = jv_array_append(jv_array(), entries[0].object);
-  for (int i = 1; i < n; i++) {
-    if (jv_equal(jv_copy(curr_key), jv_copy(entries[i].key))) {
-      jv_free(entries[i].key);
-    } else {
-      jv_free(curr_key);
-      curr_key = entries[i].key;
-      ret = jv_array_append(ret, group);
-      group = jv_array();
+  if (n > 0) {
+    jv curr_key = entries[0].key;
+    jv group = jv_array_append(jv_array(), entries[0].object);
+    for (int i = 1; i < n; i++) {
+      if (jv_equal(jv_copy(curr_key), jv_copy(entries[i].key))) {
+        jv_free(entries[i].key);
+      } else {
+        jv_free(curr_key);
+        curr_key = entries[i].key;
+        ret = jv_array_append(ret, group);
+        group = jv_array();
+      }
+      group = jv_array_append(group, entries[i].object);
     }
-    group = jv_array_append(group, entries[i].object);
+    jv_free(curr_key);
+    ret = jv_array_append(ret, group);
   }
-  jv_free(curr_key);
-  ret = jv_array_append(ret, group);
   jv_mem_free(entries);
   return ret;
 }

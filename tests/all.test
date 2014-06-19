@@ -36,6 +36,10 @@ null
 null
 []
 
+{x: -1}
+null
+{"x": -1}
+
 # The input line starts with a 0xFEFF (byte order mark) codepoint
 # No, there is no reason to have a byte order mark in UTF8 text.
 # But apparently people do, so jq shouldn't break on it.
@@ -74,6 +78,10 @@ null
 @html "<b>\(.)</b>"
 "<script>hax</script>"
 "<b>&lt;script&gt;hax&lt;/script&gt;</b>"
+
+[.[]|tojson|fromjson]
+["foo", 1, ["a", 1, "b", 2, {"foo":"bar"}]]
+["foo",1,["a",1,"b",2,{"foo":"bar"}]]
 
 #
 # Dictionary construction syntax
@@ -115,6 +123,29 @@ null
 {"foo": {"bar": 42}, "bar": "badvalue"}
 42
 
+."foo"."bar"
+{"foo": {"bar": 20}}
+20
+
+[.[]|.foo?]
+[1,[2],{"foo":3,"bar":4},{},{"foo":5}]
+[3,null,5]
+
+[.[]|.foo?.bar?]
+[1,[2],[],{"foo":3},{"foo":{"bar":4}},{}]
+[4,null]
+
+[..]
+[1,[[2]],{ "a":[1]}]
+[[1,[[2]],{"a":[1]}],1,[[2]],[2],2,{"a":[1]},[1],1]
+
+[.[]|.[]?]
+[1,null,[],[1,[2,[[3]]]],[{}],[{"a":[1,[2]]}]]
+[1,[2,[[3]]],{},{"a":[1,[2]]}]
+
+[.[]|.[1:3]?]
+[1,null,true,false,"abcdef",{},{"a":1,"b":2},[],[1,2,3,4,5],[1,2]]
+[null,"bc",[],[2,3],[2]]
 
 #
 # Multiple outputs, iteration
@@ -173,6 +204,10 @@ null
 [.[3:2], .[-5:4], .[:-2], .[-2:], .[3:3][1:], .[10:]]
 [0,1,2,3,4,5,6]
 [[], [2,3], [0,1,2,3,4], [5,6], [], []]
+
+[.[3:2], .[-5:4], .[:-2], .[-2:], .[3:3][1:], .[10:]]
+"abcdefghi"
+["","","abcdefg","hi","",""]
 
 del(.[2:4],.[0],.[-2:])
 [0,1,2,3,4,5,6,7]
@@ -285,6 +320,14 @@ null
 null
 [2, 8, 10, 14]
 
+25 % 7
+null
+4
+
+49732 % 472
+null
+172
+
 1 + tonumber + ("10" | tonumber)
 4
 15
@@ -332,6 +375,10 @@ def f: (1000,2000); f
 1000
 2000
 
+def f(a;b;c;d;e;f): [a+1,b,c,d,e,f]; f(.[0];.[1];.[0];.[0];.[0];.[0])
+[1,2]
+[2,2,1,1,1,1]
+
 ([1,2] + [4,5])
 [1,2,3]
 [1,2,4,5]
@@ -349,6 +396,36 @@ null
 [1,2,3]
 [5,6]
 [1,2,3]
+
+[.[]|floor]
+[-1.1,1.1,1.9]
+[-2, 1, 1]
+
+[.[]|sqrt]
+[4,9]
+[2,3]
+
+(add / length) as $m | map((. - $m) as $d | $d * $d) | add / length | sqrt
+[2,4,4,4,5,5,7,9]
+2
+
+# Should write a test that calls the -lm function from C (or bc(1)) to
+# check that they match the corresponding jq functions.  However,
+# there's so little template code standing between that it suffices to
+# test a handful of these.  The results were checked by eye against
+# bc(1).
+atan * 4 * 1000000|floor / 1000000
+1
+3.141592
+
+[(3.141592 / 2) * (range(0;20) / 20)|cos * 1000000|floor / 1000000]
+null
+[1,0.996917,0.987688,0.972369,0.951056,0.923879,0.891006,0.85264,0.809017,0.760406,0.707106,0.649448,0.587785,0.522498,0.45399,0.382683,0.309017,0.233445,0.156434,0.078459]
+
+[(3.141592 / 2) * (range(0;20) / 20)|sin * 1000000|floor / 1000000]
+null
+[0,0.078459,0.156434,0.233445,0.309016,0.382683,0.45399,0.522498,0.587785,0.649447,0.707106,0.760405,0.809016,0.85264,0.891006,0.923879,0.951056,0.972369,0.987688,0.996917]
+
 
 def f(x): x | x; f([.], . + [42])
 [1,2,3]
@@ -400,6 +477,14 @@ path(.)
 42
 []
 
+[paths]
+[1,[[],{"a":2}]]
+[[0],[1],[1,0],[1,1],[1,1,"a"]]
+
+[leaf_paths]
+[1,[[],{"a":2}]]
+[[0],[1,1,"a"]]
+
 ["foo",1] as $p | getpath($p), setpath($p; 20), delpaths([$p])
 {"bar": 42, "foo": ["a", "b", "c", "d"]}
 "b"
@@ -448,12 +533,17 @@ null
 {"foo": 42}
 {"foo": 43}
 
-.[] += 2, .[] *= 2, .[] -= 2, .[] /= 2
+.[] += 2, .[] *= 2, .[] -= 2, .[] /= 2, .[] %=2
 [1,3,5]
 [3,5,7]
 [2,6,10]
 [-1,1,3]
 [0.5, 1.5, 2.5]
+[1,1,1]
+
+[.[] % 7]
+[-7,-6,-5,-4,-3,-2,-1,0,1,2,3,4,5,6,7]
+[0,-6,-5,-4,-3,-2,-1,0,1,2,3,4,5,6,0]
 
 .foo += .foo
 {"foo":2}
@@ -545,6 +635,75 @@ def inc(x): x |= .+1; inc(.[].a)
 {}
 [true, true, false]
 
+# string operations
+[.[]|startswith("foo")]
+["fo", "foo", "barfoo", "foobar", "barfoob"]
+[false, true, false, true, false]
+
+[.[]|endswith("foo")]
+["fo", "foo", "barfoo", "foobar", "barfoob"]
+[false, true, true, false, false]
+
+[.[]|ltrimstr("foo")]
+["fo", "foo", "barfoo", "foobar", "afoo"]
+["fo","","barfoo","bar","afoo"]
+
+[.[]|rtrimstr("foo")]
+["fo", "foo", "barfoo", "foobar", "foob"]
+["fo","","bar","foobar","foob"]
+
+.[","]
+"a,bc,def,ghij,klmno"
+[1,4,8,13]
+
+.[", "]
+"a,bc,def,ghij,klmno"
+[]
+
+.[", "]
+"a,b,, c, d,ef, , ghi, jklmn, o"
+[4,7,13,15,20,27]
+
+[(index(","), rindex(",")), indices(",")]
+"a,bc,def,ghij,klmno"
+[1,13,[1,4,8,13]]
+
+indices(1)
+[0,1,1,2,3,4,1,5]
+[1,2,6]
+
+indices([1,2])
+[0,1,2,3,1,4,2,5,1,2,6,7]
+[1,8]
+
+indices([1,2])
+[1]
+[]
+
+indices(", ")
+"a,b, cd,e, fgh, ijkl"
+[3,9,14]
+
+[.[]|split(",")]
+["a, bc, def, ghij, jklmn, a,b, c,d, e,f", "a,b,c,d, e,f,g,h"]
+[["a"," bc"," def"," ghij"," jklmn"," a","b"," c","d"," e","f"],["a","b","c","d"," e","f","g","h"]]
+
+[.[]|split(", ")]
+["a, bc, def, ghij, jklmn, a,b, c,d, e,f", "a,b,c,d, e,f,g,h"]
+[["a","bc","def","ghij","jklmn","a,b","c,d","e,f"],["a,b,c,d","e,f,g,h"]]
+
+[.[] * 3]
+["a", "ab", "abc"]
+["aaa", "ababab", "abcabcabc"]
+
+[.[] / ","]
+["a, bc, def, ghij, jklmn, a,b, c,d, e,f", "a,b,c,d, e,f,g,h"]
+[["a"," bc"," def"," ghij"," jklmn"," a","b"," c","d"," e","f"],["a","b","c","d"," e","f","g","h"]]
+
+[.[] / ", "]
+["a, bc, def, ghij, jklmn, a,b, c,d, e,f", "a,b,c,d, e,f,g,h"]
+[["a","bc","def","ghij","jklmn","a,b","c,d","e,f"],["a,b,c,d","e,f,g,h"]]
+
 map(.[1] as $needle | .[0] | contains($needle))
 [[[],[]], [[1,2,3], [1,2]], [[1,2,3], [3,1]], [[1,2,3], [4]], [[1,2,3], [1,4]]]
 [true, true, true, false, false]
@@ -581,6 +740,10 @@ unique
 [1,2,5,3,5,3,1,3]
 [1,2,3,5]
 
+unique
+[]
+[]
+
 [min, max, min_by(.[1]), max_by(.[1]), min_by(.[2]), max_by(.[2])]
 [[4,2,"a"],[3,1,"a"],[2,4,"a"],[1,3,"a"]]
 [[1,3,"a"],[4,2,"a"],[3,1,"a"],[2,4,"a"],[4,2,"a"],[1,3,"a"]]
@@ -600,3 +763,81 @@ unique
 [{a:1}] | .[] | .a=999
 null
 {"a": 999}
+
+to_entries
+{"a": 1, "b": 2}
+[{"key":"a", "value":1}, {"key":"b", "value":2}]
+
+from_entries
+[{"key":"a", "value":1}, {"key":"b", "value":2}]
+{"a": 1, "b": 2}
+
+with_entries(.key |= "KEY_" + .)
+{"a": 1, "b": 2}
+{"KEY_a": 1, "KEY_b": 2}
+
+map(has("foo"))
+[{"foo": 42}, {}]
+[true, false]
+
+map(has(2))
+[[0,1], ["a","b","c"]]
+[false, true]
+
+keys
+[42,3,35]
+[0,1,2]
+
+[][.]
+1000000000000000000
+null
+
+map([1,2][0:.])
+[-1, 1, 2, 3, 1000000000000000000]
+[[1], [1], [1,2], [1,2], [1,2]]
+
+# Test recursive object merge
+
+{"k": {"a": 1, "b": 2}} * .
+{"k": {"a": 0,"c": 3}}
+{"k": {"a": 0, "b": 2, "c": 3}}
+
+{"k": {"a": 1, "b": 2}, "hello": {"x": 1}} * .
+{"k": {"a": 0,"c": 3}, "hello": 1}
+{"k": {"a": 0, "b": 2, "c": 3}, "hello": 1}
+
+{"k": {"a": 1, "b": 2}, "hello": 1} * .
+{"k": {"a": 0,"c": 3}, "hello": {"x": 1}}
+{"k": {"a": 0, "b": 2, "c": 3}, "hello": {"x": 1}}
+
+{"a": {"b": 1}, "c": {"d": 2}, "e": 5} * .
+{"a": {"b": 2}, "c": {"d": 3, "f": 9}}
+{"a": {"b": 2}, "c": {"d": 3, "f": 9}, "e": 5}
+
+[.[]|arrays]
+[1,2,"foo",[],[3,[]],{},true,false,null]
+[[],[3,[]]]
+
+[.[]|objects]
+[1,2,"foo",[],[3,[]],{},true,false,null]
+[{}]
+
+[.[]|iterables]
+[1,2,"foo",[],[3,[]],{},true,false,null]
+[[],[3,[]],{}]
+
+[.[]|scalars]
+[1,2,"foo",[],[3,[]],{},true,false,null]
+[1,2,"foo",true,false,null]
+
+[.[]|values]
+[1,2,"foo",[],[3,[]],{},true,false,null]
+[1,2,"foo",[],[3,[]],{},true,false]
+
+[.[]|booleans]
+[1,2,"foo",[],[3,[]],{},true,false,null]
+[true,false]
+
+[.[]|nulls]
+[1,2,"foo",[],[3,[]],{},true,false,null]
+[null]

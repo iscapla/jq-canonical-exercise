@@ -3,8 +3,38 @@
 #include <stdlib.h>
 
 #include "bytecode.h"
-#include "opcode.h"
 #include "jv_alloc.h"
+
+// flags, length
+#define NONE 0, 1
+#define CONSTANT OP_HAS_CONSTANT, 2
+#define VARIABLE (OP_HAS_VARIABLE | OP_HAS_BINDING), 3
+#define BRANCH OP_HAS_BRANCH, 2
+#define CFUNC (OP_HAS_CFUNC | OP_HAS_BINDING), 3
+#define UFUNC (OP_HAS_UFUNC | OP_HAS_BINDING | OP_IS_CALL_PSEUDO), 4
+#define DEFINITION (OP_IS_CALL_PSEUDO | OP_HAS_BINDING), 0
+#define CLOSURE_REF_IMM (OP_IS_CALL_PSEUDO | OP_HAS_BINDING), 2
+
+#define OP(name, imm, in, out) \
+  {name, #name, imm, in, out},
+
+static const struct opcode_description opcode_descriptions[] = {
+#include "opcode_list.h"
+};
+
+static const struct opcode_description invalid_opcode_description = {
+  -1, "#INVALID", 0, 0, 0, 0
+};
+
+
+const struct opcode_description* opcode_describe(opcode op) {
+  if ((int)op >= 0 && (int)op < NUM_OPCODES) {
+    return &opcode_descriptions[op];
+  } else {
+    return &invalid_opcode_description;
+  }
+}
+
 
 static int bytecode_operation_length(uint16_t* codeptr) {
   int length = opcode_describe(*codeptr)->length;
@@ -12,6 +42,22 @@ static int bytecode_operation_length(uint16_t* codeptr) {
     length += codeptr[1] * 2;
   }
   return length;
+}
+
+static void dump_code(int indent, struct bytecode* bc) {
+  int pc = 0;
+  while (pc < bc->codelen) {
+    printf("%*s", indent, "");
+    dump_operation(bc, bc->code + pc);
+    printf("\n");
+    pc += bytecode_operation_length(bc->code + pc);
+  }
+}
+
+static void symbol_table_free(struct symbol_table* syms) {
+  jv_mem_free(syms->cfunctions);
+  jv_free(syms->cfunc_names);
+  jv_mem_free(syms);
 }
 
 void dump_disassembly(int indent, struct bytecode* bc) {
@@ -34,16 +80,6 @@ void dump_disassembly(int indent, struct bytecode* bc) {
     printf("%*s%s:%d:\n", indent, "", jv_string_value(name), i);
     jv_free(name);
     dump_disassembly(indent+2, subfn);
-  }
-}
-
-void dump_code(int indent, struct bytecode* bc) {
-  int pc = 0;
-  while (pc < bc->codelen) {
-    printf("%*s", indent, "");
-    dump_operation(bc, bc->code + pc);
-    printf("\n");
-    pc += bytecode_operation_length(bc->code + pc);
   }
 }
 
@@ -109,13 +145,9 @@ void dump_operation(struct bytecode* bc, uint16_t* codeptr) {
   }  
 }
 
-void symbol_table_free(struct symbol_table* syms) {
-  jv_mem_free(syms->cfunctions);
-  jv_free(syms->cfunc_names);
-  jv_mem_free(syms);
-}
-
 void bytecode_free(struct bytecode* bc) {
+  if (!bc)
+    return;
   jv_mem_free(bc->code);
   jv_free(bc->constants);
   for (int i=0; i<bc->nsubfunctions; i++)

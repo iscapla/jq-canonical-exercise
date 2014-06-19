@@ -9,12 +9,14 @@
 
 if [ "clean" == "$1" ]; then
   make distclean || echo "continuing..."
-  rm -rf tmp autom4te.cache config
+  find config/m4 -type f \( -name libtool\* -o -name lt\* \) | xargs rm -f
+  find config -name m4 -prune -o -type f -print | xargs rm -f
+  rm -rf tmp autom4te.cache
   rm -f INSTALL Makefile.in aclocal.m4 configure config.h.in ChangeLog
   rm -f jv_utf8_tables.gen.h lexer.c lexer.h parser.c parser.h
 elif [ "superclean" == "$1" ]; then
   # if autoconf errors during distcheck, it leaves files that need chmod'ing
-  ver=$(tr -d '\n' <VERSION)
+  ver=$(scripts/version|tr -d '\n')
   if [ "x${ver}" != "x" ]; then
     if [ -d jq-${ver} ]; then
       chmod -R u+w jq-${ver}
@@ -26,6 +28,7 @@ else
   autoreconf --install
   ./configure --prefix=/opt/junk
   make check
+  [ -d tmp ] && mv tmp tmp-
   mkdir tmp
   make DESTDIR=./tmp install
   make distcheck
