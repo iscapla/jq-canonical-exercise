@@ -1,3 +1,4 @@
+#include <stdlib.h>
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>
@@ -5,29 +6,28 @@
 #include <unistd.h>
 #include "compile.h"
 #include "jv.h"
-#include "jv_parse.h"
-#include "execute.h"
-#include "config.h"  /* Autoconf generated header file */
+#include "jq.h"
 #include "jv_alloc.h"
+#include "version.h"
 
 int jq_testsuite(int argc, char* argv[]);
 
 static const char* progname;
 
 static void usage() {
-  fprintf(stderr, "\njq - commandline JSON processor [version %s]\n", PACKAGE_VERSION);
+  fprintf(stderr, "\njq - commandline JSON processor [version %s]\n", JQ_VERSION);
   fprintf(stderr, "Usage: %s [options] <jq filter> [file...]\n\n", progname);
   fprintf(stderr, "For a description of the command line options and\n");
   fprintf(stderr, "how to write jq filters (and why you might want to)\n");
   fprintf(stderr, "see the jq manpage, or the online documentation at\n");
   fprintf(stderr, "http://stedolan.github.com/jq\n\n");
-  exit(1);
+  exit(2);
 }
 
 static void die() {
   fprintf(stderr, "Use %s --help for help with command-line options,\n", progname);
   fprintf(stderr, "or see the jq documentation at http://stedolan.github.com/jq\n");
-  exit(1);
+  exit(2);
 }
 
 
@@ -54,22 +54,26 @@ enum {
   ASCII_OUTPUT = 32,
   COLOUR_OUTPUT = 64,
   NO_COLOUR_OUTPUT = 128,
+  SORTED_OUTPUT = 256,
+  UNBUFFERED_OUTPUT = 4096,
 
-  FROM_FILE = 256,
+  FROM_FILE = 512,
+
+  EXIT_STATUS = 8192,
 
   /* debugging only */
   DUMP_DISASM = 2048,
 };
 static int options = 0;
-static struct bytecode* bc;
 
-static void process(jv value, int flags) {
-  jq_state *jq = NULL;
-  jq_init(bc, value, &jq, flags);
+static int process(jq_state *jq, jv value, int flags) {
+  int ret = 14; // No valid results && -e -> exit(4)
+  jq_start(jq, value, flags);
   jv result;
   while (jv_is_valid(result = jq_next(jq))) {
     if ((options & RAW_OUTPUT) && jv_get_kind(result) == JV_KIND_STRING) {
       fwrite(jv_string_value(result), 1, jv_string_length_bytes(jv_copy(result)), stdout);
+      ret = 0;
       jv_free(result);
     } else {
       int dumpopts;
@@ -80,43 +84,27 @@ static void process(jv value, int flags) {
 #else
       dumpopts = isatty(fileno(stdout)) ? JV_PRINT_COLOUR : 0;
 #endif
+      if (options & SORTED_OUTPUT) dumpopts |= JV_PRINT_SORTED;
       if (!(options & COMPACT_OUTPUT)) dumpopts |= JV_PRINT_PRETTY;
       if (options & ASCII_OUTPUT) dumpopts |= JV_PRINT_ASCII;
       if (options & COLOUR_OUTPUT) dumpopts |= JV_PRINT_COLOUR;
       if (options & NO_COLOUR_OUTPUT) dumpopts &= ~JV_PRINT_COLOUR;
+      if (jv_get_kind(result) == JV_KIND_FALSE || jv_get_kind(result) == JV_KIND_NULL)
+        ret = 11;
+      else
+        ret = 0;
       jv_dump(result, dumpopts);
     }
     printf("\n");
+    if (options & UNBUFFERED_OUTPUT)
+      fflush(stdout);
   }
   jv_free(result);
-  jq_teardown(&jq);
-}
-
-static jv slurp_file(const char* filename) {
-  FILE* file = fopen(filename, "r");
-  if (!file) {
-    return jv_invalid_with_msg(jv_string_fmt("Could not open %s: %s",
-                                             filename,
-                                             strerror(errno)));
-  }
-  jv data = jv_string("");
-  while (!feof(file) && !ferror(file)) {
-    char buf[4096];
-    size_t n = fread(buf, 1, sizeof(buf), file);
-    data = jv_string_concat(data, jv_string_sized(buf, (int)n));
-  }
-  int badread = ferror(file);
-  fclose(file);
-  if (badread) {
-    jv_free(data);
-    return jv_invalid_with_msg(jv_string_fmt("Error reading from %s",
-                                             filename));
-  }
-  return data;
+  return ret;
 }
 
 FILE* current_input;
-const char** input_filenames;
+const char** input_filenames = NULL;
 int ninput_files;
 int next_input_idx;
 static int read_more(char* buf, size_t size) {
@@ -144,11 +132,21 @@ static int read_more(char* buf, size_t size) {
 }
 
 int main(int argc, char* argv[]) {
+  jq_state *jq = NULL;
   int ret = 0;
+  int compiled = 0;
+
   if (argc) progname = argv[0];
 
   if (argc > 1 && !strcmp(argv[1], "--run-tests")) {
-    return jq_testsuite(argc - 1, argv + 1);
+    return jq_testsuite(argc, argv);
+  }
+
+  jq = jq_init();
+  if (jq == NULL) {
+    perror("malloc");
+    ret = 2;
+    goto out;
   }
 
   const char* program = 0;
@@ -181,12 +179,18 @@ int main(int argc, char* argv[]) {
       options |= NO_COLOUR_OUTPUT;
     } else if (isoption(argv[i], 'a', "ascii-output")) {
       options |= ASCII_OUTPUT;
+    } else if (isoption(argv[i], 0, "unbuffered")) {
+      options |= UNBUFFERED_OUTPUT;
+    } else if (isoption(argv[i], 'S', "sort-keys")) {
+      options |= SORTED_OUTPUT;
     } else if (isoption(argv[i], 'R', "raw-input")) {
       options |= RAW_INPUT;
     } else if (isoption(argv[i], 'n', "null-input")) {
       options |= PROVIDE_NULL;
     } else if (isoption(argv[i], 'f', "from-file")) {
       options |= FROM_FILE;
+    } else if (isoption(argv[i], 'e', "exit-status")) {
+      options |= EXIT_STATUS;
     } else if (isoption(argv[i], 0, "arg")) {
       if (i >= argc - 2) {
         fprintf(stderr, "%s: --arg takes two parameters (e.g. -a varname value)\n", progname);
@@ -197,6 +201,27 @@ int main(int argc, char* argv[]) {
       arg = jv_object_set(arg, jv_string("value"), jv_string(argv[i+2]));
       program_arguments = jv_array_append(program_arguments, arg);
       i += 2; // skip the next two arguments
+    } else if (isoption(argv[i], 0, "argfile")) {
+      if (i >= argc - 2) {
+        fprintf(stderr, "%s: --argfile takes two parameters (e.g. -a varname filename)\n", progname);
+        die();
+      }
+      jv arg = jv_object();
+      arg = jv_object_set(arg, jv_string("name"), jv_string(argv[i+1]));
+      jv data = jv_load_file(argv[i+2], 0);
+      if (!jv_is_valid(data)) {
+        data = jv_invalid_get_msg(data);
+        fprintf(stderr, "%s: Bad JSON in --argfile %s %s: %s\n", progname,
+                argv[i+1], argv[i+2], jv_string_value(data));
+        jv_free(data);
+        ret = 2;
+        goto out;
+      }
+      if (jv_get_kind(data) == JV_KIND_ARRAY && jv_array_length(jv_copy(data)) == 1)
+          data = jv_array_get(data, 0);
+      arg = jv_object_set(arg, jv_string("value"), data);
+      program_arguments = jv_array_append(program_arguments, arg);
+      i += 2; // skip the next two arguments
     } else if (isoption(argv[i],  0,  "debug-dump-disasm")) {
       options |= DUMP_DISASM;
     } else if (isoption(argv[i],  0,  "debug-trace")) {
@@ -204,8 +229,9 @@ int main(int argc, char* argv[]) {
     } else if (isoption(argv[i], 'h', "help")) {
       usage();
     } else if (isoption(argv[i], 'V', "version")) {
-      fprintf(stderr, "jq version %s\n", PACKAGE_VERSION);
-      return 0;
+      printf("jq-%s\n", JQ_VERSION);
+      ret = 0;
+      goto out;
     } else {
       fprintf(stderr, "%s: Unknown option %s\n", progname, argv[i]);
       die();
@@ -220,27 +246,31 @@ int main(int argc, char* argv[]) {
   }
   
   if (options & FROM_FILE) {
-    jv data = slurp_file(program);
+    jv data = jv_load_file(program, 1);
     if (!jv_is_valid(data)) {
       data = jv_invalid_get_msg(data);
       fprintf(stderr, "%s: %s\n", progname, jv_string_value(data));
       jv_free(data);
-      return 1;
+      ret = 2;
+      goto out;
     }
-    bc = jq_compile_args(jv_string_value(data), program_arguments);
+    compiled = jq_compile_args(jq, jv_string_value(data), program_arguments);
     jv_free(data);
   } else {
-    bc = jq_compile_args(program, program_arguments);
+    compiled = jq_compile_args(jq, program, program_arguments);
   }
-  if (!bc) return 1;
+  if (!compiled){
+    ret = 3;
+    goto out;
+  }
 
   if (options & DUMP_DISASM) {
-    dump_disassembly(0, bc);
+    jq_dump_disassembly(jq, 0);
     printf("\n");
   }
 
   if (options & PROVIDE_NULL) {
-    process(jv_null(), jq_flags);
+    ret = process(jq, jv_null(), jq_flags);
   } else {
     jv slurped;
     if (options & SLURP) {
@@ -250,8 +280,7 @@ int main(int argc, char* argv[]) {
         slurped = jv_array();
       }
     }
-    struct jv_parser parser;
-    jv_parser_init(&parser);
+    struct jv_parser* parser = jv_parser_new(0);
     char buf[4096];
     while (read_more(buf, sizeof(buf))) {
       if (options & RAW_INPUT) {
@@ -261,39 +290,43 @@ int main(int argc, char* argv[]) {
             slurped = jv_string_concat(slurped, jv_string(buf));
           } else {
             if (buf[len-1] == '\n') buf[len-1] = 0;
-            process(jv_string(buf), jq_flags);
+            ret = process(jq, jv_string(buf), jq_flags);
           }
         }
       } else {
-        jv_parser_set_buf(&parser, buf, strlen(buf), !feof(stdin));
+        jv_parser_set_buf(parser, buf, strlen(buf), !feof(stdin));
         jv value;
-        while (jv_is_valid((value = jv_parser_next(&parser)))) {
+        while (jv_is_valid((value = jv_parser_next(parser)))) {
           if (options & SLURP) {
             slurped = jv_array_append(slurped, value);
           } else {
-            process(value, jq_flags);
+            ret = process(jq, value, jq_flags);
           }
         }
         if (jv_invalid_has_msg(jv_copy(value))) {
           jv msg = jv_invalid_get_msg(value);
           fprintf(stderr, "parse error: %s\n", jv_string_value(msg));
           jv_free(msg);
-          ret = 1;
+          ret = 4;
           break;
         } else {
           jv_free(value);
         }
       }
     }
-    jv_parser_free(&parser);
+    jv_parser_free(parser);
     if (ret != 0)
       goto out;
     if (options & SLURP) {
-      process(slurped, jq_flags);
+      ret = process(jq, slurped, jq_flags);
     }
   }
 out:
   jv_mem_free(input_filenames);
-  bytecode_free(bc);
+  jq_teardown(&jq);
+  if (ret >= 10 && (options & EXIT_STATUS))
+    return ret - 10;
+  if (ret >= 10)
+    return 0;
   return ret;
 }

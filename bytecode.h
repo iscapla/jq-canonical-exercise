@@ -3,10 +3,52 @@
 #include <stdint.h>
 
 #include "jv.h"
-#include "opcode.h"
-#include "builtin.h"
+
+typedef enum {
+#define OP(name, imm, in, out) name,
+#include "opcode_list.h"
+#undef OP
+} opcode;
+
+enum {
+  NUM_OPCODES = 
+#define OP(name, imm, in, out) +1
+#include "opcode_list.h"
+#undef OP
+};
+
+enum {
+  OP_HAS_CONSTANT = 2,
+  OP_HAS_VARIABLE = 4,
+  OP_HAS_BRANCH = 8,
+  OP_HAS_CFUNC = 32,
+  OP_HAS_UFUNC = 64,
+  OP_IS_CALL_PSEUDO = 128,
+  OP_HAS_BINDING = 1024,
+};
+struct opcode_description {
+  opcode op;
+  const char* name;
+
+  int flags;
+
+  // length in 16-bit units
+  int length;
+
+  int stack_in, stack_out;
+};
+
+const struct opcode_description* opcode_describe(opcode op);
+
 
 #define MAX_CFUNCTION_ARGS 10
+typedef void (*cfunction_ptr)();
+struct cfunction {
+  cfunction_ptr fptr;
+  const char* name;
+  int nargs;
+};
+
 struct symbol_table {
   struct cfunction* cfunctions;
   int ncfunctions;
@@ -39,10 +81,8 @@ struct bytecode {
 };
 
 void dump_disassembly(int, struct bytecode* code);
-void dump_code(int, struct bytecode* code);
 void dump_operation(struct bytecode* bc, uint16_t* op);
 
-void symbol_table_free(struct symbol_table* syms);
 void bytecode_free(struct bytecode* bc);
 
 #endif

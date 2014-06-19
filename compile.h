@@ -2,12 +2,8 @@
 #define COMPILE_H
 #include <stdint.h>
 #include "jv.h"
-#include "opcode.h"
+#include "bytecode.h"
 #include "locfile.h"
-
-struct bytecode;
-struct symbol_table;
-struct cfunction;
 
 struct inst;
 typedef struct inst inst;
@@ -24,11 +20,12 @@ block gen_noop();
 block gen_op_simple(opcode op);
 block gen_const(jv constant);
 block gen_op_target(opcode op, block target);
-block gen_op_var_unbound(opcode op, const char* name);
-block gen_op_var_bound(opcode op, block binder);
-block gen_op_block_unbound(opcode op, const char* name);
+block gen_op_unbound(opcode op, const char* name);
+block gen_op_bound(opcode op, block binder);
+block gen_op_var_fresh(opcode op, const char* name);
 
 block gen_function(const char* name, block formals, block body);
+block gen_param(const char* name);
 block gen_lambda(block body);
 block gen_call(const char* name, block body);
 block gen_subexp(block a);

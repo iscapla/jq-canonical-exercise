@@ -1,4 +1,5 @@
 %{
+#include <assert.h>
 #include "jv_alloc.h"
 #include "compile.h"
 
@@ -56,10 +57,12 @@ struct lexer_param;
 "-=" { return SETMINUS; }
 "*=" { return SETMULT; }
 "/=" { return SETDIV; }
+"%=" { return SETMOD; }
 "//=" { return SETDEFINEDOR; }
 "<=" { return LESSEQ; }
 ">=" { return GREATEREQ; }
-"."|"="|";"|","|":"|"|"|"+"|"-"|"*"|"/"|"\$"|"<"|">" { return yytext[0];}
+".." { return REC; }
+"."|"?"|"="|";"|","|":"|"|"|"+"|"-"|"*"|"/"|"%"|"\$"|"<"|">" { return yytext[0];}
 
 "["|"{"|"(" {
   return enter(yytext[0], YY_START, yyscanner);
@@ -108,6 +111,7 @@ struct lexer_param;
   
 
 [a-zA-Z_][a-zA-Z_0-9]*  { yylval->literal = jv_string(yytext); return IDENT;}
+\.[a-zA-Z_][a-zA-Z_0-9]*  { yylval->literal = jv_string(yytext+1); return FIELD;}
 
 [ \n\t]+  {}
 
