@@ -12,9 +12,13 @@ endif
 get-orig-source:
 	uscan --force-download --rename --destdir .
 
-override_dh_auto_build:
-	$(MAKE)
-	$(MAKE) real_docs
+override_dh_auto_configure:
+	cd docs && rake manpage > ../jq.1
+	dh_auto_configure
+
+override_dh_auto_clean:
+	rm -f lexer.h lexer.c parser.h parser.c jq.1
+	dh_auto_clean
 
 %:
 	dh $@ --with autoreconf
