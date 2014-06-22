@@ -1,4 +1,4 @@
-init-automake-once.patch
-remove-unecessary-rakefile-deps.patch
-enable-full-manpages.patch
+enable-manpages.patch
 disable-valgrind-tests.patch
+remove-unecessary-rakefile-deps.patch
+patch-version-into-build.patch
