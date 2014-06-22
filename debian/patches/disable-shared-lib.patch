@@ -8,7 +8,7 @@ Last-Update: 2014-06-22
 This patch header follows DEP-3: http://dep.debian.net/deps/dep3/
 --- a/Makefile.am
 +++ b/Makefile.am
-@@ -32,10 +32,10 @@
+@@ -32,12 +32,12 @@
  
  ### libjq
  
@@ -21,8 +21,11 @@ This patch header follows DEP-3: http://dep.debian.net/deps/dep3/
 +#libjq_la_LIBADD = -lm
 +#libjq_la_LDFLAGS = -export-symbols-regex '^j[qv]_' -version-info 1:4:0
  
- include_HEADERS = jv.h jq.h
+-include_HEADERS = jv.h jq.h
++#include_HEADERS = jv.h jq.h
  
+ 
+ ### Building the jq binary
 @@ -52,9 +52,9 @@
  	$(AM_V_GEN) $(generate_ver); echo "$$ver" > $@
  
@@ -31,7 +34,7 @@ This patch header follows DEP-3: http://dep.debian.net/deps/dep3/
 -jq_LDFLAGS = -static-libtool-libs
 -jq_LDADD = libjq.la -lm
 +jq_SOURCES = ${LIBJQ_SRC} main.c
-+#jq_LDFLAGS = -export-symbols-regex '^j[qv]_'
++#jq_LDFLAGS = -static-libtool-libs
 +jq_LDADD = -lm
  
  ### Tests (make check)
