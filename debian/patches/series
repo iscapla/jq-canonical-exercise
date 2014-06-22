@@ -2,3 +2,4 @@ enable-manpages.patch
 disable-valgrind-tests.patch
 remove-unecessary-rakefile-deps.patch
 patch-version-into-build.patch
+disable-shared-lib.patch
