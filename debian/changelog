@@ -1,3 +1,9 @@
+jq (1.4-1~bpo70+1) wheezy-backports; urgency=medium
+
+  * Rebuild for wheezy-backports.
+
+ -- Gonéri Le Bouder <goneri@debian.org>  Mon, 30 Jun 2014 10:24:02 +0200
+
 jq (1.4-1) unstable; urgency=medium
 
   * Imported Upstream version 1.4 (Closes: #750969, #715244, #742809, #741932)
