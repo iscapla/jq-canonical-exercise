@@ -6,10 +6,8 @@ Bug: https://github.com/stedolan/jq/issues/435
 Last-Update: 2014-06-21
 ---
 This patch header follows DEP-3: http://dep.debian.net/deps/dep3/
-Index: jq/docs/Rakefile
-===================================================================
---- jq.orig/docs/Rakefile	2015-10-11 02:08:20.982763007 +0200
-+++ jq/docs/Rakefile	2015-10-11 02:08:20.978763007 +0200
+--- a/docs/Rakefile
++++ b/docs/Rakefile
 @@ -1,91 +1,9 @@
  require 'yaml'
 -require 'bonsai'
@@ -100,5 +98,5 @@ Index: jq/docs/Rakefile
 -end
 -
  def load_manual
+   YAML::ENGINE.yamler = 'syck'
    YAML::load(File.open("content/3.manual/manual.yml"))
- end

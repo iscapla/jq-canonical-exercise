@@ -6,20 +6,20 @@
 #include "jq.h"
 
 static void jv_test();
-static void run_jq_tests(jv, int, FILE *);
+static void run_jq_tests();
 
 
-int jq_testsuite(jv libdirs, int verbose, int argc, char* argv[]) {
+int jq_testsuite(int argc, char* argv[]) {
   FILE *testdata = stdin;
   jv_test();
-  if (argc > 0) {
-    testdata = fopen(argv[0], "r");
+  if (argc > 2) {
+    testdata = fopen(argv[2], "r");
     if (!testdata) {
       perror("fopen");
       exit(1);
     }
   }
-  run_jq_tests(libdirs, verbose, testdata);
+  run_jq_tests(testdata);
   return 0;
 }
 
@@ -30,123 +30,39 @@ static int skipline(const char* buf) {
   return 0;
 }
 
-static int checkerrormsg(const char* buf) {
-  return strcmp(buf, "%%FAIL\n") == 0;
-}
-
-static int checkfail(const char* buf) {
-  return strcmp(buf, "%%FAIL\n") == 0 || strcmp(buf, "%%FAIL IGNORE MSG\n") == 0;
-}
-
-struct err_data {
+static void run_jq_tests(FILE *testdata) {
   char buf[4096];
-};
-
-static void test_err_cb(void *data, jv e) {
-  struct err_data *err_data = data;
-  if (jv_get_kind(e) != JV_KIND_STRING)
-    e = jv_dump_string(e, JV_PRINT_INVALID);
-  if (!strncmp(jv_string_value(e), "jq: error", sizeof("jq: error") - 1))
-    snprintf(err_data->buf, sizeof(err_data->buf), "%s", jv_string_value(e));
-  if (strchr(err_data->buf, '\n'))
-    *(strchr(err_data->buf, '\n')) = '\0';
-  jv_free(e);
-}
-
-static void run_jq_tests(jv lib_dirs, int verbose, FILE *testdata) {
-  char prog[4096];
-  char buf[4096];
-  struct err_data err_msg;
   int tests = 0, passed = 0, invalid = 0;
-  unsigned int lineno = 0;
-  int must_fail = 0;
-  int check_msg = 0;
   jq_state *jq = NULL;
 
   jq = jq_init();
   assert(jq);
-  if (jv_get_kind(lib_dirs) == JV_KIND_NULL)
-    lib_dirs = jv_array();
-  jq_set_attr(jq, jv_string("JQ_LIBRARY_PATH"), lib_dirs);
 
   while (1) {
-    if (!fgets(prog, sizeof(prog), testdata)) break;
-    lineno++;
-    if (skipline(prog)) continue;
-    if (checkfail(prog)) {
-      must_fail = 1;
-      check_msg = checkerrormsg(prog);
-      jq_set_error_cb(jq, test_err_cb, &err_msg);
-      continue;
-    }
-    if (prog[strlen(prog)-1] == '\n') prog[strlen(prog)-1] = 0;
-    printf("Testing '%s' at line number %u\n", prog, lineno);
+    if (!fgets(buf, sizeof(buf), testdata)) break;
+    if (skipline(buf)) continue;
+    if (buf[strlen(buf)-1] == '\n') buf[strlen(buf)-1] = 0;
+    printf("Testing %s\n", buf);
     int pass = 1;
     tests++;
-    int compiled = jq_compile(jq, prog);
-
-    if (must_fail) {
-      jq_set_error_cb(jq, NULL, NULL);
-      if (!fgets(buf, sizeof(buf), testdata)) { invalid++; break; }
-      lineno++;
-      if (buf[strlen(buf)-1] == '\n') buf[strlen(buf)-1] = 0;
-      if (compiled) {
-        printf("*** Test program compiled that should not have at line %u: %s\n", lineno, prog);
-        must_fail = 0;
-        check_msg = 0;
-        invalid++;
-        continue;
-      }
-      if (check_msg && strcmp(buf, err_msg.buf) != 0) {
-        printf("*** Erroneous test program failed with wrong message (%s) at line %u: %s\n", err_msg.buf, lineno, prog);
-        invalid++;
-      } else {
-        passed++;
-      }
-      must_fail = 0;
-      check_msg = 0;
-      continue;
-    }
-
-    if (!compiled) {
-      printf("*** Test program failed to compile at line %u: %s\n", lineno, prog);
-      invalid++;
-      // skip past test data
-      while (fgets(buf, sizeof(buf), testdata)) {
-        lineno++;
-        if (buf[0] == '\n' || (buf[0] == '\r' && buf[1] == '\n'))
-          break;
-      }
-      continue;
-    }
-    if (verbose) {
-      printf("Disassembly:\n");
-      jq_dump_disassembly(jq, 2);
-      printf("\n");
-    }
+    int compiled = jq_compile(jq, buf);
+    if (!compiled) {invalid++; continue;}
+    printf("Disassembly:\n");
+    jq_dump_disassembly(jq, 2);
+    printf("\n");
     if (!fgets(buf, sizeof(buf), testdata)) { invalid++; break; }
-    lineno++;
     jv input = jv_parse(buf);
-    if (!jv_is_valid(input)) {
-      printf("*** Input is invalid on line %u: %s\n", lineno, buf);
-      invalid++;
-      continue;
-    }
-    jq_start(jq, input, verbose ? JQ_DEBUG_TRACE : 0);
+    if (!jv_is_valid(input)){ invalid++; continue; }
+    jq_start(jq, input, JQ_DEBUG_TRACE);
 
     while (fgets(buf, sizeof(buf), testdata)) {
-      lineno++;
       if (skipline(buf)) break;
       jv expected = jv_parse(buf);
-      if (!jv_is_valid(expected)) {
-        printf("*** Expected result is invalid on line %u: %s\n", lineno, buf);
-        invalid++;
-        continue;
-      }
+      if (!jv_is_valid(expected)){ invalid++; continue; }
       jv actual = jq_next(jq);
       if (!jv_is_valid(actual)) {
         jv_free(actual);
-        printf("*** Insufficient results for test at line number %u: %s\n", lineno, prog);
+        printf("*** Insufficient results\n");
         pass = 0;
         break;
       } else if (!jv_equal(jv_copy(expected), jv_copy(actual))) {
@@ -154,10 +70,10 @@ static void run_jq_tests(jv lib_dirs, int verbose, FILE *testdata) {
         jv_dump(jv_copy(expected), 0);
         printf(", but got ");
         jv_dump(jv_copy(actual), 0);
-        printf(" for test at line number %u: %s\n", lineno, prog);
+        printf("\n");
         pass = 0;
       }
-      jv as_string = jv_dump_string(jv_copy(expected), rand() & ~(JV_PRINT_COLOUR|JV_PRINT_REFCOUNT));
+      jv as_string = jv_dump_string(jv_copy(expected), rand() & ~JV_PRINT_COLOUR);
       jv reparsed = jv_parse_sized(jv_string_value(as_string), jv_string_length_bytes(jv_copy(as_string)));
       assert(jv_equal(jv_copy(expected), jv_copy(reparsed)));
       jv_free(as_string);
@@ -170,7 +86,7 @@ static void run_jq_tests(jv lib_dirs, int verbose, FILE *testdata) {
       if (jv_is_valid(extra)) {
         printf("*** Superfluous result: ");
         jv_dump(extra, 0);
-        printf(" for test at line number %u, %s\n", lineno, prog);
+        printf("\n");
         pass = 0;
       } else {
         jv_free(extra);
@@ -185,21 +101,13 @@ static void run_jq_tests(jv lib_dirs, int verbose, FILE *testdata) {
 
 
 static void jv_test() {
-  /// JSON parser regression tests
-  {
-    jv v = jv_parse("{\"a':\"12\"}");
-    assert(jv_get_kind(v) == JV_KIND_INVALID);
-    v = jv_invalid_get_msg(v);
-    assert(strcmp(jv_string_value(v), "Expected separator between values at line 1, column 9 (while parsing '{\"a':\"12\"}')") == 0);
-    jv_free(v);
-  }
   /// Arrays and numbers
   {
     jv a = jv_array();
     assert(jv_get_kind(a) == JV_KIND_ARRAY);
     assert(jv_array_length(jv_copy(a)) == 0);
     assert(jv_array_length(jv_copy(a)) == 0);
-
+  
     a = jv_array_append(a, jv_number(42));
     assert(jv_array_length(jv_copy(a)) == 1);
     assert(jv_number_value(jv_array_get(jv_copy(a), 0)) == 42);
@@ -285,7 +193,7 @@ static void jv_test() {
     assert(jv_array_length(jv_array_get(jv_copy(a), 1)) == 1);
 
 
-    //jv_dump(jv_copy(a), 0); printf("\n");
+    jv_dump(jv_copy(a), 0); printf("\n");
     jv_free(a);
   }
 
@@ -300,13 +208,13 @@ static void jv_test() {
     jv_free(shortstr);
     jv_free(longstr);
 
-
+  
     char a1s[] = "hello", a2s[] = "hello", bs[] = "goodbye";
     jv a1 = jv_string(a1s), a2 = jv_string(a2s), b = jv_string(bs);
     assert(jv_equal(jv_copy(a1), jv_copy(a2)));
     assert(jv_equal(jv_copy(a2), jv_copy(a1)));
     assert(!jv_equal(jv_copy(a1), jv_copy(b)));
-
+    
     assert(jv_string_hash(jv_copy(a1)) == jv_string_hash(jv_copy(a1)));
     assert(jv_string_hash(jv_copy(a1)) == jv_string_hash(jv_copy(a2)));
     assert(jv_string_hash(jv_copy(b)) != jv_string_hash(jv_copy(a1)));
@@ -340,7 +248,15 @@ static void jv_test() {
     jv_free(o1);
     assert(jv_number_value(jv_object_get(jv_copy(o2), jv_string("bar"))) == 240);
 
-    //jv_dump(jv_copy(o2), 0); printf("\n");
+    jv_dump(jv_copy(o2), 0); printf("\n");
+
     jv_free(o2);
+  }
+
+  /// Compile errors
+  {
+    jq_state *jq = jq_init();
+    jq_compile_args(jq, "}", jv_array());
+    jq_teardown(&jq);
   }
 }

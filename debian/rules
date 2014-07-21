@@ -17,6 +17,7 @@ override_dh_auto_configure:
 	dh_auto_configure
 
 override_dh_auto_clean:
+	rm -f lexer.h lexer.c parser.h parser.c jq.1
 	dh_auto_clean
 
 %:

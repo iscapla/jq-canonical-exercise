@@ -1,9 +1,20 @@
-jq (1.5-1) unstable; urgency=medium
+jq (1.4-2.1) unstable; urgency=medium
 
-  * New upstream release.
-  * Add "Multi-Arch: foreign" flag (Closes: #799676)
+  * Non-maintainer upload.
+  * Restore the 1.3-1.1 NMU changelog.
+  * Fix FTBFS on big endian architectures.
+    Add big-endian-fix.patch.
+    Patch by Dejan Latinovic <Dejan.Latinovic@imgtec.com>.
+    Closes: #754754.
 
- -- Simon Elsbrock <simon@iodev.org>  Sun, 11 Oct 2015 02:09:09 +0200
+ -- Anibal Monsalve Salazar <anibal@debian.org>  Mon, 21 Jul 2014 07:42:05 +0100
+
+jq (1.4-2) unstable; urgency=medium
+
+  * Set valgrind build-dep to amd64 i386 only (Closes: #752529)
+  * Remove unneeded test inhibitor
+
+ -- Simon Elsbrock <simon@iodev.org>  Sun, 06 Jul 2014 02:17:12 +0200
 
 jq (1.4-1) unstable; urgency=medium
 
@@ -13,6 +24,14 @@ jq (1.4-1) unstable; urgency=medium
   * Override dh_auto_configure and dh_auto_clean
 
  -- Simon Elsbrock <simon@iodev.org>  Sun, 22 Jun 2014 20:49:15 +0200
+
+jq (1.3-1.1) unstable; urgency=medium
+
+  * Non-maintainer upload.
+  * Remove build dependency on valgrind on archs where the valgrind
+    tests are disabled. (Closes: #729138)
+
+ -- Christian Hofstaedtler <zeha@debian.org>  Thu, 13 Feb 2014 13:30:29 +0100
 
 jq (1.3-1) unstable; urgency=low
 

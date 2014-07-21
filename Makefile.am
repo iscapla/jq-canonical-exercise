@@ -1,13 +1,13 @@
-
 ### C source files to be built and distributed.
 
 LIBJQ_INCS = jq_parser.h builtin.h bytecode.h compile.h exec_stack.h	\
    libm.h jv_alloc.h jv_dtoa.h jv_unicode.h locfile.h		 	\
-   opcode_list.h parser.y jv_utf8_tables.h lexer.l util.h linker.h
+   opcode_list.h parser.y jv_utf8_tables.h lexer.l
 
 LIBJQ_SRC = locfile.c bytecode.c compile.c execute.c builtin.c jv.c	\
   jv_parse.c jv_print.c jv_dtoa.c jv_unicode.c jv_aux.c jv_file.c	\
-  jv_alloc.c jq_test.c util.c linker.c ${LIBJQ_INCS}
+  jv_alloc.c jq_test.c ${LIBJQ_INCS}
+
 
 ### C build options
 
@@ -20,18 +20,10 @@ ACLOCAL_AMFLAGS = -I config/m4
 
 # While there is some autoconf macro support for lex/flex, it doesn't support
 # header file creation so we'll use good old make
-if MAINTAINER_MODE
 BUILT_SOURCES = lexer.h lexer.c parser.h parser.c version.h
 lexer.c: lexer.l
 	$(AM_V_LEX) flex -o lexer.c --header-file=lexer.h $<
 lexer.h: lexer.c
-else
-BUILT_SOURCES = 
-.y.c:
-	$(AM_V_YACC) echo "NOT building parser.c!"
-.l.c:
-	$(AM_V_LEX) echo "NOT building lexer.c!"
-endif
 
 # Tell YACC (bison) autoconf macros that you want a header file created.
 # If the --warnings=all fails, you probably have an old version of bison
@@ -47,28 +39,6 @@ libjq_la_LDFLAGS = -export-symbols-regex '^j[qv]_' -version-info 1:4:0
 
 include_HEADERS = jv.h jq.h
 
-### Running tests under Valgrind
-
-if ENABLE_VALGRIND
-NO_VALGRIND =
-else
-NO_VALGRIND = 1
-endif
-
-### Code coverage with gcov
-
-if ENABLE_GCOV
-AM_CFLAGS += --coverage --no-inline
-endif
-
-### Error injection for testing
-
-if ENABLE_ERROR_INJECTION
-lib_LTLIBRARIES += libinject_errors.la
-libinject_errors_la_SOURCES = inject_errors.c
-libinject_errors_la_LIBADD = -ldl
-libinject_errors_la_LDFLAGS = -module
-endif
 
 ### Building the jq binary
 
@@ -80,21 +50,16 @@ generate_ver = ver="`{ $(srcdir)/scripts/version || echo '$(VERSION)' ; } | sed 
 	@ $(generate_ver); test "x`cat version.h 2>/dev/null`" = "x$$ver" || touch .remake-version-h
 version.h: .remake-version-h
 	$(AM_V_GEN) $(generate_ver); echo "$$ver" > $@
-main.c: version.h
 
 bin_PROGRAMS = jq
-jq_SOURCES = main.c version.h
+jq_SOURCES = main.c
 jq_LDFLAGS = -static-libtool-libs
 jq_LDADD = libjq.la -lm
 
-if ENABLE_ALL_STATIC
-jq_LDFLAGS += -all-static
-endif
-
 ### Tests (make check)
 
-TESTS = tests/mantest tests/jqtest tests/onigtest tests/shtest
-TESTS_ENVIRONMENT = NO_VALGRIND=$(NO_VALGRIND)
+TESTS = tests/all.test
+TEST_LOG_COMPILER = ${srcdir}/tests/run
 
 
 ### Building the manpage
@@ -109,22 +74,19 @@ man_MANS = jq.1
 if ENABLE_DOCS
 jq.1: $(srcdir)/docs/content/3.manual/manual.yml
 	$(AM_V_GEN) ( cd ${abs_srcdir}/docs; '$(BUNDLER)' exec rake manpage ) > $@ || { rm -f $@; false; }
-jq.1.prebuilt: jq.1
-	$(AM_V_GEN) cp $^ $@ || { rm -f $@; false; }
 jq.1.default: $(srcdir)/docs/default_manpage.md
 	$(AM_V_GEN) ( cd ${abs_srcdir}/docs; '$(BUNDLER)' exec rake manpage_default ) > $@ || { rm -f $@; false; }
-real_docs: jq.1 jq.1.prebuilt
-	@if cmp jq.1 $(srcdir)/jq.1.default > /dev/null; then\
+real_docs: jq.1
+	if cmp jq.1 $(srcdir)/jq.1.default > /dev/null; then\
 	  rm -f jq.1; $(MAKE) $(AM_MAKEFLAGS) jq.1;\
 	fi
 else
-jq.1: $(srcdir)/jq.1.prebuilt
+jq.1: $(srcdir)/jq.1.default
 	$(AM_V_GEN) cp $^ $@
 real_docs:
 	@echo "Ruby dependencies not found, cannot build manpage." > /dev/stderr
 	@echo "Follow the instructions in docs/README.md to install them" > /dev/stderr
 	@echo "and then rerun ./configure" > /dev/stderr
-	@echo "A pre-built, possibly out-of-date manpage used." > /dev/stderr
 	false
 endif
 
@@ -148,21 +110,9 @@ DOC_FILES = docs/content docs/public docs/templates docs/site.yml	\
 # setup is only used by distribution developers, not package developers.
 # Still, as a matter of allowing patching, its not a bad idea to distribute 
 # the developer setup script in the tarball.
-EXTRA_DIST = $(man_MANS) $(TESTS) $(TEST_LOG_COMPILER) jq.spec		\
-	$(DOC_FILES) scripts/version parser.h parser.c lexer.h		\
-	lexer.c tests/onig.supp tests/torture/input0.json		\
-	tests/modules/.jq tests/modules/a.jq tests/modules/b/b.jq	\
-	tests/modules/c/c.jq tests/modules/c/d.jq			\
-	tests/modules/lib/jq/e/e.jq tests/modules/lib/jq/f.jq		\
-	tests/setup tests/jq.test tests/onig.test			\
-	tests/modules/data.json						\
-	tests/modules/syntaxerror/syntaxerror.jq			\
-	tests/modules/test_bind_order.jq				\
-	tests/modules/test_bind_order0.jq				\
-	tests/modules/test_bind_order1.jq				\
-	tests/modules/test_bind_order2.jq				\
-	jq.1.prebuilt
-
+EXTRA_DIST = $(man_MANS) $(TESTS) $(TEST_LOG_COMPILER) jq.spec	\
+	 $(DOC_FILES) scripts/version parser.h parser.c lexer.h	\
+	 lexer.c
 
 # README.md is expected in Github projects, good stuff in it, so we'll 
 # distribute it and install it with the package in the doc directory.
@@ -184,15 +134,11 @@ dist-clean-local:
 # Not sure why this doesn't get cleaned up automatically, guess
 # automake used to man pages which are hand coded?
 # 'make clean' doesn't delete the manpage if it can't be rebuilt
+.PHONY: clean-local-docs
 clean-local-docs:
 if ENABLE_DOCS
 	rm -f jq.1
 endif 
 
-clean-local-gcov:
-	rm -f *.gcno *.gcda *.gcov
-
-clean-local: clean-local-docs clean-local-gcov
+clean-local: clean-local-docs
 	rm -f version.h .remake-version-h
-
-.PHONY: clean-local-docs clean-local-gcov

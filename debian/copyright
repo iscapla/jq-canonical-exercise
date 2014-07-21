@@ -320,7 +320,7 @@ License: Apache-2.0
 Files: jv_dtoa.c
 Copyright: 1991, 2000, 2001 by Lucent Technologies
            1991, 1996 by Lucent Technologies
-License: Expat
+License:
  The author of this software is David M. Gay.
  .
  Permission to use, copy, modify, and distribute this software for any
