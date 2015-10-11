@@ -1,3 +1,10 @@
+jq (1.5-1) unstable; urgency=medium
+
+  * New upstream release.
+  * Add "Multi-Arch: foreign" flag (Closes: #799676)
+
+ -- Simon Elsbrock <simon@iodev.org>  Sun, 11 Oct 2015 02:09:09 +0200
+
 jq (1.4-1) unstable; urgency=medium
 
   * Imported Upstream version 1.4 (Closes: #750969, #715244, #742809, #741932)

@@ -1,5 +1,5 @@
 enable-manpages.patch
-disable-valgrind-tests.patch
 remove-unecessary-rakefile-deps.patch
 patch-version-into-build.patch
-disable-shared-lib.patch
+static-libjq-dynamic-libonig2.patch
+dont-distribute-duplicate-docs.patch
