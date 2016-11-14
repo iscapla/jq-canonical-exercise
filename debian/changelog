@@ -1,3 +1,11 @@
+jq (1.5+dfsg-1.1) unstable; urgency=medium
+
+  * Non-maintainer upload.
+  * Apply patch to fix CVE-2016-4074 (Closes: #822456)
+  * Apply patch to fix CVE-2015-8863 (Closes: #802231)
+
+ -- Harlan Lieberman-Berg <hlieberman@debian.org>  Sun, 13 Nov 2016 19:48:02 -0500
+
 jq (1.5+dfsg-1) unstable; urgency=medium
 
   * New upstream release.
