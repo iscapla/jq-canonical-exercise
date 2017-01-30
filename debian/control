@@ -1,7 +1,8 @@
 Source: jq
 Section: utils
 Priority: optional
-Maintainer: Simon Elsbrock <simon@iodev.org>
+Maintainer: ChangZhuo Chen (陳昌倬) <czchen@debian.org>
+Uploaders: Simon Elsbrock <simon@iodev.org>
 Build-Depends: debhelper (>= 9),
                bison,
                dh-autoreconf,
