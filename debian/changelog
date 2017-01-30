@@ -1,11 +1,11 @@
-jq (1.5+dfsg-2) UNRELEASED; urgency=medium
+jq (1.5+dfsg-2) unstable; urgency=medium
 
   * Change Maintainer to ChangZhuo Chen. (Closes: #852280)
   * Bump Standards-Version to 3.9.8.
   * Bump compat to 10.
   * Update Vcs-* fields.
 
- -- ChangZhuo Chen (陳昌倬) <czchen@debian.org>  Mon, 30 Jan 2017 12:31:55 +0800
+ -- ChangZhuo Chen (陳昌倬) <czchen@debian.org>  Mon, 30 Jan 2017 12:41:39 +0800
 
 jq (1.5+dfsg-1.3) unstable; urgency=medium
 
