@@ -24,7 +24,7 @@ Forwarded: not-needed
  if [ -z "${NO_VALGRIND-}" ] && which valgrind > /dev/null; then
 -    VALGRIND="valgrind --error-exitcode=1 --leak-check=full \
 -                       --suppressions=$JQTESTDIR/onig.supp"
-+    VALGRIND="libtool --mode=execute -- valgrind \
++    VALGRIND="libtool --mode=execute valgrind \
 +    		      	       --error-exitcode=1 --leak-check=full \
 +		      	       --suppressions=$JQTESTDIR/onig.supp"
      Q=-q
