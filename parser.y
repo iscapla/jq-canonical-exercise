@@ -48,6 +48,7 @@ struct lexer_param;
 %token INVALID_CHARACTER
 %token <literal> IDENT
 %token <literal> LITERAL
+%token <literal> FORMAT
 %token EQ "=="
 %token NEQ "!="
 %token DEFINEDOR "//"
@@ -57,6 +58,7 @@ struct lexer_param;
 %token THEN "then"
 %token ELSE "else"
 %token ELSE_IF "elif"
+%token REDUCE "reduce"
 %token END "end"
 %token AND "and"
 %token OR "or"
@@ -90,7 +92,7 @@ struct lexer_param;
 
 %type <blk> Exp Term MkDict MkDictPair ExpD ElseBody QQString FuncDef FuncDefs String
 %{
-#include "lexer.gen.h"
+#include "lexer.h"
 struct lexer_param {
   yyscan_t lexer;
 };
@@ -139,6 +141,17 @@ static block gen_index(block obj, block key) {
   return BLOCK(gen_subexp(key), obj, gen_op_simple(INDEX));
 }
 
+static block gen_slice_index(block obj, block start, block end) {
+  block key = BLOCK(gen_subexp(gen_const(jv_object())),
+                    gen_subexp(gen_const(jv_string("start"))),
+                    gen_subexp(start),
+                    gen_op_simple(INSERT),
+                    gen_subexp(gen_const(jv_string("end"))),
+                    gen_subexp(end),
+                    gen_op_simple(INSERT));
+  return BLOCK(key, obj, gen_op_simple(INDEX));
+}
+
 static block gen_binop(block a, block b, int op) {
   const char* funcname = 0;
   switch (op) {
@@ -158,15 +171,30 @@ static block gen_binop(block a, block b, int op) {
   return gen_call(funcname, BLOCK(gen_lambda(a), gen_lambda(b)));
 }
 
-static block gen_format(block a) {
-  return BLOCK(a, gen_call("tostring", gen_noop()));
+static block gen_format(block a, jv fmt) {
+  return BLOCK(a, gen_call("format", BLOCK(gen_lambda(gen_const(fmt)))));
+}
+
+static block gen_definedor_assign(block object, block val) {
+  block tmp = block_bind(gen_op_var_unbound(STOREV, "tmp"),
+                         gen_noop(), OP_HAS_VARIABLE);
+  return BLOCK(gen_op_simple(DUP),
+               val, tmp,
+               gen_call("_modify", BLOCK(gen_lambda(object),
+                                         gen_lambda(gen_definedor(gen_noop(), 
+                                                                  gen_op_var_bound(LOADV, tmp))))));
 }
  
-static block gen_update(block a, block op, int optype) {
-  if (optype) {
-    op = gen_binop(gen_noop(), op, optype);
-  }
-  return gen_assign(BLOCK(a, gen_op_simple(DUP), op));
+static block gen_update(block object, block val, int optype) {
+  block tmp = block_bind(gen_op_var_unbound(STOREV, "tmp"),
+                         gen_noop(), OP_HAS_VARIABLE);
+  return BLOCK(gen_op_simple(DUP),
+               val,
+               tmp,
+               gen_call("_modify", BLOCK(gen_lambda(object), 
+                                         gen_lambda(gen_binop(gen_noop(),
+                                                              gen_op_var_bound(LOADV, tmp),
+                                                              optype)))));
 }
 
 %}
@@ -194,10 +222,13 @@ FuncDef Exp %prec ';' {
 } |
 
 Term "as" '$' IDENT '|' Exp {
-  $$ = BLOCK(gen_op_simple(DUP), $1, 
-             block_bind(gen_op_var_unbound(STOREV, jv_string_value($4)), 
-                        $6, OP_HAS_VARIABLE));
+  $$ = gen_var_binding($1, jv_string_value($4), $6);
   jv_free($4);
+} |
+
+"reduce" Term "as" '$' IDENT '(' Exp ';' Exp ')' {
+  $$ = gen_reduce(jv_string_value($5), $2, $7, $9);
+  jv_free($5);
 } |
 
 "if" Exp "then" Exp ElseBody {
@@ -209,7 +240,7 @@ Term "as" '$' IDENT '|' Exp {
 } |
 
 Exp '=' Exp {
-  $$ = gen_assign(BLOCK(gen_op_simple(DUP), $3, gen_op_simple(SWAP), $1, gen_op_simple(SWAP)));
+  $$ = gen_call("_assign", BLOCK(gen_lambda($1), gen_lambda($3)));
 } |
 
 Exp "or" Exp {
@@ -225,11 +256,11 @@ Exp "//" Exp {
 } |
 
 Exp "//=" Exp {
-  $$ = gen_update($1, gen_definedor(gen_noop(), $3), 0);
+  $$ = gen_definedor_assign($1, $3);
 } |
 
 Exp "|=" Exp {
-  $$ = gen_update($1, $3, 0);
+  $$ = gen_call("_modify", BLOCK(gen_lambda($1), gen_lambda($3)));
 } |
 
 Exp '|' Exp { 
@@ -246,6 +277,10 @@ Exp '+' Exp {
 
 Exp "+=" Exp {
   $$ = gen_update($1, $3, '+');
+} |
+
+'-' Exp {
+  $$ = BLOCK($2, gen_call("_negate", gen_noop()));
 } |
 
 Exp '-' Exp {
@@ -312,13 +347,30 @@ FuncDef:
                     $7);
   jv_free($2);
   jv_free($4);
+} |
+
+"def" IDENT '(' IDENT ';' IDENT ')' ':' Exp ';' {
+  $$ = gen_function(jv_string_value($2), 
+                    BLOCK(gen_op_block_unbound(CLOSURE_PARAM, jv_string_value($4)), 
+                          gen_op_block_unbound(CLOSURE_PARAM, jv_string_value($6))),
+                    $9);
+  jv_free($2);
+  jv_free($4);
+  jv_free($6);
 }
+
 
 
 String:
-QQSTRING_START QQString QQSTRING_END {
-  $$ = $2;
+QQSTRING_START { $<literal>$ = jv_string("text"); } QQString QQSTRING_END {
+  $$ = $3;
+  jv_free($<literal>2);
+} |
+FORMAT QQSTRING_START { $<literal>$ = $1; } QQString QQSTRING_END {
+  $$ = $4;
+  jv_free($<literal>3);
 }
+
 
 QQString:
 /* empty */ {
@@ -328,7 +380,7 @@ QQString QQSTRING_TEXT {
   $$ = gen_binop($1, gen_const($2), '+');
 } |
 QQString QQSTRING_INTERP_START Exp QQSTRING_INTERP_END {
-  $$ = gen_binop($1, gen_format($3), '+');
+  $$ = gen_binop($1, gen_format($3, jv_copy($<literal>0)), '+');
 }
 
 
@@ -367,11 +419,23 @@ Term '[' Exp ']' {
 Term '[' ']' {
   $$ = block_join($1, gen_op_simple(EACH)); 
 } |
+Term '[' Exp ':' Exp ']' {
+  $$ = gen_slice_index($1, $3, $5);
+} |
+Term '[' Exp ':' ']' {
+  $$ = gen_slice_index($1, $3, gen_const(jv_null()));
+} |
+Term '[' ':' Exp ']' {
+  $$ = gen_slice_index($1, gen_const(jv_null()), $4);
+} |
 LITERAL {
   $$ = gen_const($1); 
 } |
 String {
   $$ = $1;
+} |
+FORMAT {
+  $$ = gen_format(gen_noop(), $1);
 } |
 '(' Exp ')' { 
   $$ = $2; 
@@ -395,6 +459,11 @@ IDENT {
 } |
 IDENT '(' Exp ')' {
   $$ = gen_call(jv_string_value($1), gen_lambda($3));
+  $$ = gen_location(@1, $$);
+  jv_free($1);
+} |
+IDENT '(' Exp ';' Exp ')' {
+  $$ = gen_call(jv_string_value($1), BLOCK(gen_lambda($3), gen_lambda($5)));
   $$ = gen_location(@1, $$);
   jv_free($1);
 } |

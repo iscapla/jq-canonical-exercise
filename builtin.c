@@ -1,10 +1,11 @@
 #include <string.h>
 #include "builtin.h"
-#include "bytecode.h"
 #include "compile.h"
-#include "parser.h"
+#include "jq_parser.h"
 #include "locfile.h"
 #include "jv_aux.h"
+#include "jv_unicode.h"
+
 
 
 typedef jv (*func_1)(jv);
@@ -43,7 +44,13 @@ static jv type_error2(jv bad1, jv bad2, const char* msg) {
 
 static jv f_plus(jv input, jv a, jv b) {
   jv_free(input);
-  if (jv_get_kind(a) == JV_KIND_NUMBER && jv_get_kind(b) == JV_KIND_NUMBER) {
+  if (jv_get_kind(a) == JV_KIND_NULL) {
+    jv_free(a);
+    return b;
+  } else if (jv_get_kind(b) == JV_KIND_NULL) {
+    jv_free(b);
+    return a;
+  } else if (jv_get_kind(a) == JV_KIND_NUMBER && jv_get_kind(b) == JV_KIND_NUMBER) {
     return jv_number(jv_number_value(a) + 
                      jv_number_value(b));
   } else if (jv_get_kind(a) == JV_KIND_STRING && jv_get_kind(b) == JV_KIND_STRING) {
@@ -57,17 +64,25 @@ static jv f_plus(jv input, jv a, jv b) {
   }
 }
 
+static jv f_negate(jv input) {
+  if (jv_get_kind(input) != JV_KIND_NUMBER) {
+    return type_error(input, "cannot be negated");
+  }
+  jv ret = jv_number(-jv_number_value(input));
+  jv_free(input);
+  return ret;
+}
+
 static jv f_minus(jv input, jv a, jv b) {
   jv_free(input);
   if (jv_get_kind(a) == JV_KIND_NUMBER && jv_get_kind(b) == JV_KIND_NUMBER) {
     return jv_number(jv_number_value(a) - jv_number_value(b));
   } else if (jv_get_kind(a) == JV_KIND_ARRAY && jv_get_kind(b) == JV_KIND_ARRAY) {
     jv out = jv_array();
-    for (int i=0; i<jv_array_length(jv_copy(a)); i++) {
-      jv x = jv_array_get(jv_copy(a), i);
+    jv_array_foreach(a, i, x) {
       int include = 1;
-      for (int j=0; j<jv_array_length(jv_copy(b)); j++) {
-        if (jv_equal(jv_copy(x), jv_array_get(jv_copy(b), j))) {
+      jv_array_foreach(b, j, y) {
+        if (jv_equal(jv_copy(x), y)) {
           include = 0;
           break;
         }
@@ -100,22 +115,6 @@ static jv f_divide(jv input, jv a, jv b) {
   } else {
     return type_error2(a, b, "cannot be divided");
   }  
-}
-
-static jv f_add(jv array) {
-  if (jv_get_kind(array) != JV_KIND_ARRAY) {
-    return type_error(array, "cannot have its elements added");
-  } else if (jv_array_length(jv_copy(array)) == 0) {
-    jv_free(array);
-    return jv_null();
-  } else {
-    jv sum = jv_array_get(jv_copy(array), 0);
-    for (int i = 1; i < jv_array_length(jv_copy(array)); i++) {
-      sum = f_plus(jv_null(), sum, jv_array_get(jv_copy(array), i));
-    }
-    jv_free(array);
-    return sum;
-  }
 }
 
 static jv f_equal(jv input, jv a, jv b) {
@@ -161,9 +160,7 @@ static jv f_greatereq(jv input, jv a, jv b) {
 }
 
 static jv f_contains(jv a, jv b) {
-  jv_kind akind = jv_get_kind(a);
-
-  if (akind == jv_get_kind(b)) {
+  if (jv_get_kind(a) == jv_get_kind(b)) {
     return jv_bool(jv_contains(a, b));
   } else {
     return type_error2(a, b, "cannot have their containment checked");
@@ -190,7 +187,7 @@ static jv f_length(jv input) {
   } else if (jv_get_kind(input) == JV_KIND_OBJECT) {
     return jv_number(jv_object_length(input));
   } else if (jv_get_kind(input) == JV_KIND_STRING) {
-    return jv_number(jv_string_length(input));
+    return jv_number(jv_string_length_codepoints(input));
   } else if (jv_get_kind(input) == JV_KIND_NULL) {
     jv_free(input);
     return jv_number(0);
@@ -204,6 +201,172 @@ static jv f_tostring(jv input) {
     return input;
   } else {
     return jv_dump_string(input, 0);
+  }
+}
+
+#define CHARS_ALPHANUM "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+
+static jv escape_string(jv input, const char* escapings) {
+
+  assert(jv_get_kind(input) == JV_KIND_STRING);
+  const char* lookup[128] = {0};
+  const char* p = escapings;
+  while (*p) {
+    lookup[(int)*p] = p+1;
+    p++;
+    p += strlen(p);
+    p++;
+  }
+
+  jv ret = jv_string("");
+  const char* i = jv_string_value(input);
+  const char* end = i + jv_string_length_bytes(jv_copy(input));
+  const char* cstart;
+  int c = 0;
+  while ((i = jvp_utf8_next((cstart = i), end, &c))) {
+    assert(c != -1);
+    if (c < 128 && lookup[c]) {
+      ret = jv_string_append_str(ret, lookup[c]);
+    } else {
+      ret = jv_string_append_buf(ret, cstart, i - cstart);
+    }
+  }
+  jv_free(input);
+  return ret;
+
+}
+
+static jv f_format(jv input, jv fmt) {
+  if (jv_get_kind(fmt) != JV_KIND_STRING) {
+    jv_free(input);
+    return type_error(fmt, "is not a valid format");
+  }
+  const char* fmt_s = jv_string_value(fmt);
+  if (!strcmp(fmt_s, "json")) {
+    jv_free(fmt);
+    return jv_dump_string(input, 0);
+  } else if (!strcmp(fmt_s, "text")) {
+    jv_free(fmt);
+    return f_tostring(input);
+  } else if (!strcmp(fmt_s, "csv")) {
+    jv_free(fmt);
+    if (jv_get_kind(input) != JV_KIND_ARRAY)
+      return type_error(input, "cannot be csv-formatted, only array");
+    jv line = jv_string("");
+    jv_array_foreach(input, i, x) {
+      if (i) line = jv_string_append_str(line, ",");
+      switch (jv_get_kind(x)) {
+      case JV_KIND_NULL:
+        /* null rendered as empty string */
+        jv_free(x);
+        break;
+      case JV_KIND_TRUE:
+      case JV_KIND_FALSE:
+        line = jv_string_concat(line, jv_dump_string(x, 0));
+        break;
+      case JV_KIND_NUMBER:
+        if (jv_number_value(x) != jv_number_value(x)) {
+          /* NaN, render as empty string */
+          jv_free(x);
+        } else {
+          line = jv_string_concat(line, jv_dump_string(x, 0));
+        }
+        break;
+      case JV_KIND_STRING: {
+        line = jv_string_append_str(line, "\"");
+        line = jv_string_concat(line, escape_string(x, "\"\"\"\0"));
+        line = jv_string_append_str(line, "\"");
+        break;
+      }
+      default:
+        jv_free(input);
+        jv_free(line);
+        return type_error(x, "is not valid in a csv row");
+      }
+    }
+    jv_free(input);
+    return line;
+  } else if (!strcmp(fmt_s, "html")) {
+    jv_free(fmt);
+    return escape_string(f_tostring(input), "&&amp;\0<&lt;\0>&gt;\0'&apos;\0\"&quot;\0");
+  } else if (!strcmp(fmt_s, "uri")) {
+    jv_free(fmt);
+    input = f_tostring(input);
+
+    int unreserved[128] = {0};
+    const char* p = CHARS_ALPHANUM "-_.!~*'()";
+    while (*p) unreserved[(int)*p++] = 1;
+
+    jv line = jv_string("");
+    const char* s = jv_string_value(input);
+    for (int i=0; i<jv_string_length_bytes(jv_copy(input)); i++) {
+      unsigned ch = (unsigned)(unsigned char)*s;
+      if (ch < 128 && unreserved[ch]) {
+        line = jv_string_append_buf(line, s, 1);
+      } else {
+        line = jv_string_concat(line, jv_string_fmt("%%%02x", ch));
+      }
+      s++;
+    }
+    jv_free(input);
+    return line;
+  } else if (!strcmp(fmt_s, "sh")) {
+    jv_free(fmt);
+    if (jv_get_kind(input) != JV_KIND_ARRAY)
+      input = jv_array_set(jv_array(), 0, input);
+    jv line = jv_string("");
+    jv_array_foreach(input, i, x) {
+      if (i) line = jv_string_append_str(line, " ");
+      switch (jv_get_kind(x)) {
+      case JV_KIND_NULL:
+      case JV_KIND_TRUE:
+      case JV_KIND_FALSE:
+      case JV_KIND_NUMBER:
+        line = jv_string_concat(line, jv_dump_string(x, 0));
+        break;
+
+      case JV_KIND_STRING: {
+        line = jv_string_append_str(line, "'");
+        line = jv_string_concat(line, escape_string(x, "''\\''\0"));
+        line = jv_string_append_str(line, "'");
+        break;
+      }
+
+      default:
+        jv_free(input);
+        jv_free(line);
+        return type_error(x, "can not be escaped for shell");
+      }
+    }
+    jv_free(input);
+    return line;
+  } else if (!strcmp(fmt_s, "base64")) {
+    jv_free(fmt);
+    input = f_tostring(input);
+    jv line = jv_string("");
+    const char b64[64 + 1] = CHARS_ALPHANUM "+/";
+    const char* data = jv_string_value(input);
+    int len = jv_string_length_bytes(jv_copy(input));
+    for (int i=0; i<len; i+=3) {
+      uint32_t code = 0;
+      int n = len - i >= 3 ? 3 : len-i;
+      for (int j=0; j<3; j++) {
+        code <<= 8;
+        code |= j < n ? (unsigned)data[i+j] : 0;
+      }
+      char buf[4];
+      for (int j=0; j<4; j++) {
+        buf[j] = b64[(code >> (18 - j*6)) & 0x3f];
+      }
+      if (n < 3) buf[3] = '=';
+      if (n < 2) buf[2] = '=';
+      line = jv_string_append_buf(line, buf, sizeof(buf));
+    }
+    jv_free(input);
+    return line;
+  } else {
+    jv_free(input);
+    return jv_invalid_with_msg(jv_string_concat(fmt, jv_string(" is not a valid format")));
   }
 }
 
@@ -305,15 +468,19 @@ static jv f_error(jv input, jv msg) {
   return jv_invalid_with_msg(msg);
 }
 
-
-static struct cfunction function_list[] = {
+static const struct cfunction function_list[] = {
   {(cfunction_ptr)f_plus, "_plus", 3},
+  {(cfunction_ptr)f_negate, "_negate", 1},
   {(cfunction_ptr)f_minus, "_minus", 3},
   {(cfunction_ptr)f_multiply, "_multiply", 3},
   {(cfunction_ptr)f_divide, "_divide", 3},
   {(cfunction_ptr)f_tonumber, "tonumber", 1},
   {(cfunction_ptr)f_tostring, "tostring", 1},
   {(cfunction_ptr)f_keys, "keys", 1},
+  {(cfunction_ptr)jv_setpath, "setpath", 3}, // FIXME typechecking
+  {(cfunction_ptr)jv_getpath, "getpath", 2},
+  {(cfunction_ptr)jv_delpaths, "delpaths", 2},
+  {(cfunction_ptr)jv_has, "has", 2},
   {(cfunction_ptr)f_equal, "_equal", 3},
   {(cfunction_ptr)f_notequal, "_notequal", 3},
   {(cfunction_ptr)f_less, "_less", 3},
@@ -323,7 +490,6 @@ static struct cfunction function_list[] = {
   {(cfunction_ptr)f_contains, "contains", 2},
   {(cfunction_ptr)f_length, "length", 1},
   {(cfunction_ptr)f_type, "type", 1},
-  {(cfunction_ptr)f_add, "add", 1},
   {(cfunction_ptr)f_sort, "sort", 1},
   {(cfunction_ptr)f_sort_by_impl, "_sort_by_impl", 2},
   {(cfunction_ptr)f_group_by_impl, "_group_by_impl", 2},
@@ -332,31 +498,55 @@ static struct cfunction function_list[] = {
   {(cfunction_ptr)f_min_by_impl, "_min_by_impl", 2},
   {(cfunction_ptr)f_max_by_impl, "_max_by_impl", 2},
   {(cfunction_ptr)f_error, "error", 2},
+  {(cfunction_ptr)f_format, "format", 2},
 };
 
-static struct symbol_table cbuiltins = 
-  {function_list, sizeof(function_list)/sizeof(function_list[0])};
-
-typedef block (*bytecoded_builtin)();
 struct bytecoded_builtin { const char* name; block code; };
 static block bind_bytecoded_builtins(block b) {
-  struct bytecoded_builtin builtin_defs[] = {
-    {"empty", gen_op_simple(BACKTRACK)},
-    {"false", gen_const(jv_false())},
-    {"true", gen_const(jv_true())},
-    {"null", gen_const(jv_null())},
-    {"not", gen_condbranch(gen_const(jv_false()),
-                           gen_const(jv_true()))}
-  };
   block builtins = gen_noop();
-  for (unsigned i=0; i<sizeof(builtin_defs)/sizeof(builtin_defs[0]); i++) {
-    builtins = BLOCK(builtins, gen_function(builtin_defs[i].name, gen_noop(),
-                                            builtin_defs[i].code));
+  {
+    struct bytecoded_builtin builtin_defs[] = {
+      {"empty", gen_op_simple(BACKTRACK)},
+      {"false", gen_const(jv_false())},
+      {"true", gen_const(jv_true())},
+      {"null", gen_const(jv_null())},
+      {"not", gen_condbranch(gen_const(jv_false()),
+                             gen_const(jv_true()))}
+    };
+    for (unsigned i=0; i<sizeof(builtin_defs)/sizeof(builtin_defs[0]); i++) {
+      builtins = BLOCK(builtins, gen_function(builtin_defs[i].name, gen_noop(),
+                                              builtin_defs[i].code));
+    }
   }
-  return block_bind(builtins, b, OP_IS_CALL_PSEUDO);
+  {
+    struct bytecoded_builtin builtin_def_1arg[] = {
+      {"path", BLOCK(gen_op_simple(PATH_BEGIN), 
+                     gen_call("arg", gen_noop()),
+                     gen_op_simple(PATH_END))},
+    };
+    for (unsigned i=0; i<sizeof(builtin_def_1arg)/sizeof(builtin_def_1arg[0]); i++) {
+      builtins = BLOCK(builtins, gen_function(builtin_def_1arg[i].name,
+                                              gen_op_block_unbound(CLOSURE_PARAM, "arg"),
+                                              builtin_def_1arg[i].code));
+    }
+  }
+  {
+    block rangevar = block_bind(gen_op_var_unbound(STOREV, "rangevar"),
+                                gen_noop(), OP_HAS_VARIABLE);
+    block init = BLOCK(gen_op_simple(DUP), gen_call("start", gen_noop()), rangevar);
+    block range = BLOCK(init, 
+                        gen_call("end", gen_noop()),
+                        gen_op_var_bound(RANGE, rangevar));
+    builtins = BLOCK(builtins, gen_function("range",
+                                            BLOCK(gen_op_block_unbound(CLOSURE_PARAM, "start"),
+                                                  gen_op_block_unbound(CLOSURE_PARAM, "end")),
+                                            range));
+  }
+  
+  return block_bind_referenced(builtins, b, OP_IS_CALL_PSEUDO);
 }
 
-static const char* jq_builtins[] = {
+static const char* const jq_builtins[] = {
   "def map(f): [.[] | f];",
   "def select(f): if f then . else empty end;",
   "def sort_by(f): _sort_by_impl(map([f]));",
@@ -364,6 +554,15 @@ static const char* jq_builtins[] = {
   "def unique: group_by(.) | map(.[0]);",
   "def max_by(f): _max_by_impl(map([f]));",
   "def min_by(f): _min_by_impl(map([f]));",
+  "def add: reduce .[] as $x (null; . + $x);",
+  "def del(f): delpaths([path(f)]);",
+  "def _assign(paths; value): value as $v | reduce path(paths) as $p (.; setpath($p; $v));",
+  "def _modify(paths; update): reduce path(paths) as $p (.; setpath($p; getpath($p) | update));",
+  "def recurse(f): ., (f | select(. != null) | recurse(f));",
+  "def to_entries: [keys[] as $k | {key: $k, value: .[$k]}];",
+  "def from_entries: map({(.key): .value}) | add;",
+  "def with_entries(f): to_entries | map(f) | from_entries;",
+  "def reverse: [.[length - 1 - range(0;length)]];",
 };
 
 
@@ -374,9 +573,9 @@ block builtins_bind(block b) {
     block funcs;
     int nerrors = jq_parse_library(&src, &funcs);
     assert(!nerrors);
-    b = block_bind(funcs, b, OP_IS_CALL_PSEUDO);
+    b = block_bind_referenced(funcs, b, OP_IS_CALL_PSEUDO);
     locfile_free(&src);
   }
   b = bind_bytecoded_builtins(b);
-  return gen_cbinding(&cbuiltins, b);
+  return gen_cbinding(function_list, sizeof(function_list)/sizeof(function_list[0]), b);
 }

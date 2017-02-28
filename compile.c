@@ -30,7 +30,7 @@ struct inst {
     uint16_t intval;
     struct inst* target;
     jv constant;
-    struct cfunction* cfunc;
+    const struct cfunction* cfunc;
   } imm;
 
   location source;
@@ -216,13 +216,14 @@ int block_has_only_binders(block binders, int bindflags) {
   return 1;
 }
 
-static void block_bind_subblock(block binder, block body, int bindflags) {
+static int block_bind_subblock(block binder, block body, int bindflags) {
   assert(block_is_single(binder));
   assert((opcode_describe(binder.first->op)->flags & bindflags) == bindflags);
   assert(binder.first->symbol);
   assert(binder.first->bound_by == 0 || binder.first->bound_by == binder.first);
 
   binder.first->bound_by = binder.first;
+  int nrefs = 0;
   for (inst* i = body.first; i; i = i->next) {
     int flags = opcode_describe(i->op)->flags;
     if ((flags & bindflags) == bindflags &&
@@ -230,12 +231,14 @@ static void block_bind_subblock(block binder, block body, int bindflags) {
         !strcmp(i->symbol, binder.first->symbol)) {
       // bind this instruction
       i->bound_by = binder.first;
+      nrefs++;
     }
     // binding recurses into closures
-    block_bind_subblock(binder, i->subfn, bindflags);
+    nrefs += block_bind_subblock(binder, i->subfn, bindflags);
     // binding recurses into argument list
-    block_bind_subblock(binder, i->arglist, bindflags);
+    nrefs += block_bind_subblock(binder, i->arglist, bindflags);
   }
+  return nrefs;
 }
 
 static void block_bind_each(block binder, block body, int bindflags) {
@@ -249,6 +252,21 @@ static void block_bind_each(block binder, block body, int bindflags) {
 block block_bind(block binder, block body, int bindflags) {
   block_bind_each(binder, body, bindflags);
   return block_join(binder, body);
+}
+
+block block_bind_referenced(block binder, block body, int bindflags) {
+  assert(block_has_only_binders(binder, bindflags));
+  bindflags |= OP_HAS_BINDING;
+  block refd = gen_noop();
+  for (inst* curr; (curr = block_take(&binder));) {
+    block b = inst_block(curr);
+    if (block_bind_subblock(b, body, bindflags)) {
+      refd = BLOCK(refd, b);
+    } else {
+      block_free(b);
+    }
+  }
+  return block_join(refd, body);
 }
 
 block gen_function(const char* name, block formals, block body) {
@@ -275,7 +293,7 @@ block gen_call(const char* name, block args) {
 
 
 block gen_subexp(block a) {
-  return BLOCK(gen_op_simple(DUP), a, gen_op_simple(SWAP));
+  return BLOCK(gen_op_simple(SUBEXP_BEGIN), a, gen_op_simple(SUBEXP_END));
 }
 
 block gen_both(block a, block b) {
@@ -292,34 +310,34 @@ block gen_collect(block expr) {
                                gen_noop(), OP_HAS_VARIABLE);
   block c = BLOCK(gen_op_simple(DUP), gen_const(jv_array()), array_var);
 
-  block tail = BLOCK(gen_op_simple(DUP),
-                     gen_op_var_bound(LOADV, array_var),
-                     gen_op_simple(SWAP),
-                     gen_op_simple(APPEND),
-                     gen_op_var_bound(STOREV, array_var),
+  block tail = BLOCK(gen_op_var_bound(APPEND, array_var),
                      gen_op_simple(BACKTRACK));
 
   return BLOCK(c,
                gen_op_target(FORK, tail),
                expr, 
                tail,
-               gen_op_var_bound(LOADV, array_var));
+               gen_op_var_bound(LOADVN, array_var));
 }
 
-block gen_assign(block expr) {
-  block result_var = block_bind(gen_op_var_unbound(STOREV, "result"),
-                                gen_noop(), OP_HAS_VARIABLE);
+block gen_reduce(const char* varname, block source, block init, block body) {
+  block res_var = block_bind(gen_op_var_unbound(STOREV, "reduce"),
+                             gen_noop(), OP_HAS_VARIABLE);
 
   block loop = BLOCK(gen_op_simple(DUP),
-                     expr,
-                     gen_op_var_bound(ASSIGN, result_var),
+                     source,
+                     block_bind(gen_op_var_unbound(STOREV, varname),
+                                BLOCK(gen_op_var_bound(LOADVN, res_var),
+                                      body,
+                                      gen_op_var_bound(STOREV, res_var)),
+                                OP_HAS_VARIABLE),
                      gen_op_simple(BACKTRACK));
-
   return BLOCK(gen_op_simple(DUP),
-               result_var,
+               init,
+               res_var,
                gen_op_target(FORK, loop),
                loop,
-               gen_op_var_bound(LOADV, result_var));
+               gen_op_var_bound(LOADVN, res_var));
 }
 
 block gen_definedor(block a, block b) {
@@ -380,16 +398,22 @@ block gen_or(block a, block b) {
                                                    gen_const(jv_false())))));
 }
 
+block gen_var_binding(block var, const char* name, block body) {
+  return BLOCK(gen_op_simple(DUP), var,
+               block_bind(gen_op_var_unbound(STOREV, name),
+                          body, OP_HAS_VARIABLE));
+}
+
 block gen_cond(block cond, block iftrue, block iffalse) {
   return BLOCK(gen_op_simple(DUP), cond, 
                gen_condbranch(BLOCK(gen_op_simple(POP), iftrue),
                               BLOCK(gen_op_simple(POP), iffalse)));
 }
 
-block gen_cbinding(struct symbol_table* t, block code) {
-  for (int cfunc=0; cfunc<t->ncfunctions; cfunc++) {
+block gen_cbinding(const struct cfunction* cfunctions, int ncfunctions, block code) {
+  for (int cfunc=0; cfunc<ncfunctions; cfunc++) {
     inst* i = inst_new(CLOSURE_CREATE_C);
-    i->imm.cfunc = &t->cfunctions[cfunc];
+    i->imm.cfunc = &cfunctions[cfunc];
     i->symbol = strdup(i->imm.cfunc->name);
     code = block_bind(inst_block(i), code, OP_IS_CALL_PSEUDO);
   }
@@ -510,13 +534,8 @@ static int compile(struct locfile* locations, struct bytecode* bc, block b) {
   int var_frame_idx = 0;
   bc->nsubfunctions = 0;
   errors += expand_call_arglist(locations, &b);
-  if (bc->parent) {
-    // functions should end in a return
-    b = BLOCK(b, gen_op_simple(RET));
-  } else {
-    // the toplevel should YIELD;BACKTRACK; when it finds an answer
-    b = BLOCK(b, gen_op_simple(YIELD), gen_op_simple(BACKTRACK));
-  }
+  b = BLOCK(b, gen_op_simple(RET));
+  jv localnames = jv_array();
   for (inst* curr = b.first; curr; curr = curr->next) {
     if (!curr->next) assert(curr == b.last);
     int length = opcode_describe(curr->op)->length;
@@ -534,6 +553,7 @@ static int compile(struct locfile* locations, struct bytecode* bc, block b) {
     if ((opcode_describe(curr->op)->flags & OP_HAS_VARIABLE) &&
         curr->bound_by == curr) {
       curr->imm.intval = var_frame_idx++;
+      localnames = jv_array_append(localnames, jv_string(curr->symbol));
     }
 
     if (curr->op == CLOSURE_CREATE) {
@@ -543,10 +563,13 @@ static int compile(struct locfile* locations, struct bytecode* bc, block b) {
     if (curr->op == CLOSURE_CREATE_C) {
       assert(curr->bound_by == curr);
       int idx = bc->globals->ncfunctions++;
+      bc->globals->cfunc_names = jv_array_append(bc->globals->cfunc_names,
+                                                 jv_string(curr->symbol));
       bc->globals->cfunctions[idx] = *curr->imm.cfunc;
       curr->imm.intval = idx;
     }
   }
+  bc->debuginfo = jv_object_set(bc->debuginfo, jv_string("locals"), localnames);
   if (bc->nsubfunctions) {
     bc->subfunctions = jv_mem_alloc(sizeof(struct bytecode*) * bc->nsubfunctions);
     for (inst* curr = b.first; curr; curr = curr->next) {
@@ -556,12 +579,16 @@ static int compile(struct locfile* locations, struct bytecode* bc, block b) {
         subfn->globals = bc->globals;
         subfn->parent = bc;
         subfn->nclosures = 0;
+        subfn->debuginfo = jv_object_set(jv_object(), jv_string("name"), jv_string(curr->symbol));
+        jv params = jv_array();
         for (inst* param = curr->arglist.first; param; param = param->next) {
           assert(param->op == CLOSURE_PARAM);
           assert(param->bound_by == param);
           param->imm.intval = subfn->nclosures++;
           param->compiled = subfn;
+          params = jv_array_append(params, jv_string(param->symbol));
         }
+        subfn->debuginfo = jv_object_set(subfn->debuginfo, jv_string("params"), params);
         errors += compile(locations, subfn, curr->subfn);
         curr->subfn = gen_noop();
       }
@@ -629,6 +656,8 @@ int block_compile(block b, struct locfile* locations, struct bytecode** out) {
   int ncfunc = count_cfunctions(b);
   bc->globals->ncfunctions = 0;
   bc->globals->cfunctions = jv_mem_alloc(sizeof(struct cfunction) * ncfunc);
+  bc->globals->cfunc_names = jv_array();
+  bc->debuginfo = jv_object_set(jv_object(), jv_string("name"), jv_null());
   int nerrors = compile(locations, bc, b);
   assert(bc->globals->ncfunctions == ncfunc);
   if (nerrors > 0) {
