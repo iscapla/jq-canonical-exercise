@@ -1,6 +1,7 @@
 jq (1.5+dfsg-3) UNRELEASED; urgency=medium
 
   * d/copyright: Use https protocol in Format field
+  * d/watch: Use https protocol
 
  -- Ondřej Nový <onovy@debian.org>  Mon, 01 Oct 2018 10:43:52 +0200
 
