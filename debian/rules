@@ -9,9 +9,6 @@ ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
     MAKEFLAGS += -j$(NUMJOBS)
 endif
 
-get-orig-source:
-	uscan --force-download --rename --destdir .
-
 override_dh_auto_configure:
 	cp jq.1 jq.1.old
 	cd docs && rake manpage > ../jq.1
