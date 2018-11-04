@@ -1,0 +1,35 @@
+From: Helmut Grohne <helmut@subdivi.de>
+Date: Sun, 4 Nov 2018 21:35:11 +0800
+Subject: stop using libtool-bin
+
+---
+ Makefile.am | 2 +-
+ tests/setup | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/Makefile.am b/Makefile.am
+index 90075b9..19b170c 100644
+--- a/Makefile.am
++++ b/Makefile.am
+@@ -93,7 +93,7 @@ endif
+ ### Tests (make check)
+ 
+ TESTS = tests/mantest tests/jqtest tests/onigtest tests/shtest
+-TESTS_ENVIRONMENT = NO_VALGRIND=$(NO_VALGRIND)
++TESTS_ENVIRONMENT = NO_VALGRIND=$(NO_VALGRIND) LIBTOOL="$(LIBTOOL)"
+ 
+ 
+ ### Building the manpage
+diff --git a/tests/setup b/tests/setup
+index 8e3b6fa..ccd041b 100755
+--- a/tests/setup
++++ b/tests/setup
+@@ -9,7 +9,7 @@ JQBASEDIR=$JQTESTDIR/..
+ JQ=$JQBASEDIR/jq
+ 
+ if [ -z "${NO_VALGRIND-}" ] && which valgrind > /dev/null; then
+-    VALGRIND="libtool --mode=execute -- valgrind \
++    VALGRIND="$LIBTOOL --mode=execute -- valgrind \
+     		      	       --error-exitcode=1 --leak-check=full \
+ 		      	       --suppressions=$JQTESTDIR/onig.supp"
+     Q=-q

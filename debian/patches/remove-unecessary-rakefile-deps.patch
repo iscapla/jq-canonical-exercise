@@ -1,15 +1,20 @@
-Description: patch Rakefile to allow for easier manpage generation
- This patch disable some of the dependencies that are not
- required to build the actual manpage.
-Author: Simon Elsbrock
+From: =?utf-8?b?IkNoYW5nWmh1byBDaGVuICjpmbPmmIzlgKwpIg==?=
+ <czchen@debian.org>
+Date: Sun, 4 Nov 2018 21:34:10 +0800
+Subject: patch Rakefile to allow for easier manpage generation
+
+This patch disable some of the dependencies that are not
+required to build the actual manpage.
 Bug: https://github.com/stedolan/jq/issues/435
 Last-Update: 2014-06-21
 ---
-This patch header follows DEP-3: http://dep.debian.net/deps/dep3/
-Index: jq/docs/Rakefile
-===================================================================
---- jq.orig/docs/Rakefile	2015-10-11 02:08:20.982763007 +0200
-+++ jq/docs/Rakefile	2015-10-11 02:08:20.978763007 +0200
+ docs/Rakefile | 82 -----------------------------------------------------------
+ 1 file changed, 82 deletions(-)
+
+diff --git a/docs/Rakefile b/docs/Rakefile
+index 167ee87..09630c4 100644
+--- a/docs/Rakefile
++++ b/docs/Rakefile
 @@ -1,91 +1,9 @@
  require 'yaml'
 -require 'bonsai'

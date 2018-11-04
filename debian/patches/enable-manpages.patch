@@ -1,14 +1,19 @@
-Description: patch Makefile to always generate the manpage.
-Author: Simon Elsbrock
+From: =?utf-8?b?IkNoYW5nWmh1byBDaGVuICjpmbPmmIzlgKwpIg==?=
+ <czchen@debian.org>
+Date: Sun, 4 Nov 2018 21:34:10 +0800
+Subject: patch Makefile to always generate the manpage.
+
 Forwarded: not-needed
 Last-Update: 2014-06-21
 ---
-This patch header follows DEP-3: http://dep.debian.net/deps/dep3/
-Index: jq/Makefile.am
-===================================================================
---- jq.orig/Makefile.am	2015-10-11 02:08:02.582763538 +0200
-+++ jq/Makefile.am	2015-10-11 02:08:02.578763538 +0200
-@@ -106,6 +106,7 @@
+ Makefile.am | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/Makefile.am b/Makefile.am
+index c3a771f..6f44e5a 100644
+--- a/Makefile.am
++++ b/Makefile.am
+@@ -106,6 +106,7 @@ TESTS_ENVIRONMENT = NO_VALGRIND=$(NO_VALGRIND)
  
  man_MANS = jq.1
  .PHONY: real_docs

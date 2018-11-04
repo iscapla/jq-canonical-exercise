@@ -1,9 +1,18 @@
-Description: Ensure jq doesn't statically link in libraries
-Author: Harlan Lieberman-Berg <hlieberman@debian.org>
+From: Harlan Lieberman-Berg <hlieberman@debian.org>
+Date: Sun, 4 Nov 2018 21:34:10 +0800
+Subject: Ensure jq doesn't statically link in libraries
+
 Forwarded: not-needed
+---
+ Makefile.am | 3 +--
+ tests/setup | 5 +++--
+ 2 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/Makefile.am b/Makefile.am
+index 99c5d5b..90075b9 100644
 --- a/Makefile.am
 +++ b/Makefile.am
-@@ -84,11 +84,10 @@
+@@ -84,11 +84,10 @@ main.c: version.h
  
  bin_PROGRAMS = jq
  jq_SOURCES = main.c version.h
@@ -16,9 +25,11 @@ Forwarded: not-needed
  endif
  
  ### Tests (make check)
+diff --git a/tests/setup b/tests/setup
+index a6bc5f4..8e3b6fa 100755
 --- a/tests/setup
 +++ b/tests/setup
-@@ -9,8 +9,9 @@
+@@ -9,8 +9,9 @@ JQBASEDIR=$JQTESTDIR/..
  JQ=$JQBASEDIR/jq
  
  if [ -z "${NO_VALGRIND-}" ] && which valgrind > /dev/null; then
