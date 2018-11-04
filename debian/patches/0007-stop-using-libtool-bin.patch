@@ -3,28 +3,30 @@ Date: Sun, 4 Nov 2018 21:35:11 +0800
 Subject: stop using libtool-bin
 
 ---
- Makefile.am | 2 +-
+ Makefile.am | 4 ++--
  tests/setup | 2 +-
- 2 files changed, 2 insertions(+), 2 deletions(-)
+ 2 files changed, 3 insertions(+), 3 deletions(-)
 
 diff --git a/Makefile.am b/Makefile.am
-index 90075b9..19b170c 100644
+index edf7cf4..bf0bcf8 100644
 --- a/Makefile.am
 +++ b/Makefile.am
-@@ -93,7 +93,7 @@ endif
+@@ -118,8 +118,8 @@ endif
+ 
  ### Tests (make check)
  
- TESTS = tests/mantest tests/jqtest tests/onigtest tests/shtest
+-TESTS = tests/optionaltest tests/mantest tests/jqtest tests/onigtest tests/shtest tests/utf8test tests/base64test
 -TESTS_ENVIRONMENT = NO_VALGRIND=$(NO_VALGRIND)
++TESTS = tests/mantest tests/jqtest tests/onigtest tests/shtest
 +TESTS_ENVIRONMENT = NO_VALGRIND=$(NO_VALGRIND) LIBTOOL="$(LIBTOOL)"
  
  
  ### Building the manpage
 diff --git a/tests/setup b/tests/setup
-index 8e3b6fa..ccd041b 100755
+index e000637..984cea7 100755
 --- a/tests/setup
 +++ b/tests/setup
-@@ -9,7 +9,7 @@ JQBASEDIR=$JQTESTDIR/..
+@@ -13,7 +13,7 @@ JQBASEDIR=$JQTESTDIR/..
  JQ=$JQBASEDIR/jq
  
  if [ -z "${NO_VALGRIND-}" ] && which valgrind > /dev/null; then
