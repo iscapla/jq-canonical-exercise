@@ -6,3 +6,4 @@ stack-exhaustion.patch
 disable-static-libtool.patch
 0007-stop-using-libtool-bin.patch
 0008-Do-not-use-venderized-oniguruma.patch
+0009-Hardcode-version-to-1.6.patch
