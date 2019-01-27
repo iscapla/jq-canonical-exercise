@@ -8,7 +8,7 @@ Subject: stop using libtool-bin
  2 files changed, 3 insertions(+), 3 deletions(-)
 
 diff --git a/Makefile.am b/Makefile.am
-index edf7cf4..bf0bcf8 100644
+index 13f74c9..df020b1 100644
 --- a/Makefile.am
 +++ b/Makefile.am
 @@ -118,8 +118,8 @@ endif

@@ -4,21 +4,19 @@ Subject: Ensure jq doesn't statically link in libraries
 
 Forwarded: not-needed
 ---
- Makefile.am | 5 ++---
+ Makefile.am | 3 +--
  tests/setup | 6 +++---
- 2 files changed, 5 insertions(+), 6 deletions(-)
+ 2 files changed, 4 insertions(+), 5 deletions(-)
 
 diff --git a/Makefile.am b/Makefile.am
-index cd16690..edf7cf4 100644
+index cd16690..13f74c9 100644
 --- a/Makefile.am
 +++ b/Makefile.am
-@@ -105,8 +105,7 @@ src/builtin.inc: src/builtin.jq
- src/builtin.o: src/builtin.inc
+@@ -106,7 +106,6 @@ src/builtin.o: src/builtin.inc
  
  bin_PROGRAMS = jq
--jq_SOURCES = src/main.c src/version.h
+ jq_SOURCES = src/main.c src/version.h
 -jq_LDFLAGS = -static-libtool-libs
-+jq_SOURCES = main.c version.h
  jq_LDADD = libjq.la -lm
  
  if WIN32

@@ -8,7 +8,7 @@ Subject: Do not use venderized oniguruma
  1 file changed, 7 deletions(-)
 
 diff --git a/Makefile.am b/Makefile.am
-index bf0bcf8..01401f1 100644
+index df020b1..bbb49eb 100644
 --- a/Makefile.am
 +++ b/Makefile.am
 @@ -138,13 +138,6 @@ jq.1: $(srcdir)/jq.1.prebuilt
