@@ -13,8 +13,12 @@ jq (1.6-1) UNRELEASED; urgency=medium
     * Remove unused Build-Depends dh-autoreconf.
     * Remove get-orig-source.
   * Bump compat to 11.
+  * Remove unused cp
+  * do not use venderized oniguruma.
+  * Fix uninitialized variables.
+    * Thanks to Reiner Herrmann.
 
- -- ChangZhuo Chen (陳昌倬) <czchen@debian.org>  Sun, 04 Nov 2018 21:47:07 +0800
+ -- ChangZhuo Chen (陳昌倬) <czchen@debian.org>  Mon, 07 Oct 2019 18:03:08 +0800
 
 jq (1.5+dfsg-2) unstable; urgency=medium
 
