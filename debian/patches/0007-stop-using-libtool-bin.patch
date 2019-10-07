@@ -7,11 +7,9 @@ Subject: stop using libtool-bin
  tests/setup | 2 +-
  2 files changed, 3 insertions(+), 3 deletions(-)
 
-diff --git a/Makefile.am b/Makefile.am
-index 13f74c9..df020b1 100644
 --- a/Makefile.am
 +++ b/Makefile.am
-@@ -118,8 +118,8 @@ endif
+@@ -118,8 +118,8 @@
  
  ### Tests (make check)
  
@@ -22,11 +20,9 @@ index 13f74c9..df020b1 100644
  
  
  ### Building the manpage
-diff --git a/tests/setup b/tests/setup
-index e000637..984cea7 100755
 --- a/tests/setup
 +++ b/tests/setup
-@@ -13,7 +13,7 @@ JQBASEDIR=$JQTESTDIR/..
+@@ -13,7 +13,7 @@
  JQ=$JQBASEDIR/jq
  
  if [ -z "${NO_VALGRIND-}" ] && which valgrind > /dev/null; then
@@ -34,4 +30,4 @@ index e000637..984cea7 100755
 +    VALGRIND="$LIBTOOL --mode=execute -- valgrind \
      		      	       --error-exitcode=1 --leak-check=full \
  		      	       --suppressions=$JQTESTDIR/onig.supp"
-     Q=-q
+     VG_EXIT0=--error-exitcode=0
