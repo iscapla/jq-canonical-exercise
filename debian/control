@@ -2,7 +2,7 @@ Source: jq
 Section: utils
 Priority: optional
 Maintainer: ChangZhuo Chen (陳昌倬) <czchen@debian.org>
-Build-Depends: debhelper (>= 11),
+Build-Depends: debhelper-compat (= 12),
                bison,
                flex,
                libonig-dev,
