@@ -20,8 +20,5 @@ override_dh_auto_clean:
 	dh_auto_clean
 	test ! -f ./jq.1.old || mv ./jq.1.old jq.1
 
-override_dh_install:
-	dh_install --list-missing
-
 %:
 	dh $@
