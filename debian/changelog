@@ -22,7 +22,7 @@ jq (1.6-1) unstable; urgency=medium
   * Set Rules-Requires-Root: no.
   * Update copyright.
 
- -- ChangZhuo Chen (陳昌倬) <czchen@debian.org>  Thu, 10 Oct 2019 00:11:13 +0800
+ -- ChangZhuo Chen (陳昌倬) <czchen@debian.org>  Thu, 10 Oct 2019 00:17:01 +0800
 
 jq (1.5+dfsg-2) unstable; urgency=medium
 
