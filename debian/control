@@ -11,6 +11,7 @@ Build-Depends: debhelper-compat (= 12),
                ruby-ronn,
                valgrind [amd64 i386],
 Standards-Version: 4.4.1
+Rules-Requires-Root: no
 Homepage: https://github.com/stedolan/jq
 Vcs-Git: https://salsa.debian.org/debian/jq.git
 Vcs-Browser: https://salsa.debian.org/debian/jq
