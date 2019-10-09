@@ -1,4 +1,4 @@
-jq (1.6-1) UNRELEASED; urgency=medium
+jq (1.6-1) unstable; urgency=medium
 
   [ Ondřej Nový ]
   * d/copyright: Use https protocol in Format field.
@@ -9,15 +9,18 @@ jq (1.6-1) UNRELEASED; urgency=medium
 
   [ ChangZhuo Chen (陳昌倬) ]
   * New upstream release.
-  * Bump Standards-Version to 4.2.1.
+  * Bump Standards-Version to 4.4.1.
     * Remove unused Build-Depends dh-autoreconf.
     * Remove get-orig-source.
   * Bump compat to 12
+  * Remove Simon Elsbrock as Uploaders (Closes: #871236).
   * Do not use venderized oniguruma.
   * Fix uninitialized variables.
     * Thanks to Reiner Herrmann.
+  * Set Rules-Requires-Root: no.
+  * Update copyright.
 
- -- ChangZhuo Chen (陳昌倬) <czchen@debian.org>  Tue, 08 Oct 2019 23:52:35 +0800
+ -- ChangZhuo Chen (陳昌倬) <czchen@debian.org>  Thu, 10 Oct 2019 00:11:13 +0800
 
 jq (1.5+dfsg-2) unstable; urgency=medium
 
