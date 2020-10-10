@@ -8,7 +8,7 @@ Build-Depends: debhelper-compat (= 12),
                libonig-dev,
                libtool,
                rake,
-               ruby-ronn,
+               ruby-ronn:native,
                valgrind [amd64 i386],
 Standards-Version: 4.4.1
 Rules-Requires-Root: no
