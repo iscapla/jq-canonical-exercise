@@ -1,3 +1,13 @@
+jq (1.6-3) unstable; urgency=medium
+
+  * Fix the build failing on dh_missing (Closes: #972040)
+  * debian/jq.docs:
+    - use the correct paths to install the documentation
+  * debian/rules:
+    - clean the .la
+
+ -- Sebastien Bacher <seb128@debian.org>  Tue, 24 Nov 2020 20:45:35 +0100
+
 jq (1.6-2) unstable; urgency=medium
 
   [ Helmut Grohne ]
