@@ -1,3 +1,12 @@
+jq (1.6-3) UNRELEASED; urgency=medium
+
+  * Bump Standards-Version to 4.6.2.
+  * Clean modified files (Closes: #1047460)
+  * Update Homepage.
+  * Update d/copyright.
+
+ -- ChangZhuo Chen (陳昌倬) <czchen@debian.org>  Mon, 21 Aug 2023 00:27:20 +0800
+
 jq (1.6-2.1) unstable; urgency=medium
 
   [ Paul Gevers ]
