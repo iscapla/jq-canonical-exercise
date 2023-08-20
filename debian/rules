@@ -20,9 +20,8 @@ override_dh_install:
 override_dh_auto_test:
 	VERBOSE=1 dh_auto_test
 
-override_dh_auto_clean:
-	dh_auto_clean
-	test ! -f ./jq.1.old || mv ./jq.1.old jq.1
+override_dh_clean:
+	dh_clean -- jq.1 src/builtin.inc
 
 %:
 	dh $@
