@@ -13,6 +13,10 @@ override_dh_auto_configure:
 	cd docs && rake manpage > ../jq.1
 	dh_auto_configure -- --disable-static
 
+override_dh_install:
+	find debian/tmp -name '*.la' -print -delete
+	dh_install
+
 override_dh_auto_test:
 	VERBOSE=1 dh_auto_test
 
