@@ -1,5 +1,12 @@
 jq (1.6-3) unstable; urgency=medium
 
+  [ Alex Murray ]
+  * Fix fromdate when local time is during daylight savings
+    (Closes: #979308 LP: #1910162)
+    - d/p/fix-ftbfs-when-localtime-is-dst.patch: Backport upstream patch
+      which ensures fromdate uses the correct time during daylight savings
+
+  [ ChangZhuo Chen (陳昌倬) ]
   * Bump Standards-Version to 4.6.2.
   * Clean modified files (Closes: #1047460)
   * Update Homepage.
