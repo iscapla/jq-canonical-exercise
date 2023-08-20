@@ -1,3 +1,13 @@
+jq (1.6-2.2) Unreleased; urgency=medium
+
+  [ Alex Murray ]
+  * Fix fromdate when local time is during daylight savings
+    (Closes: #979308 LP: #1910162)
+    - d/p/fix-ftbfs-when-localtime-is-dst.patch: Backport upstream patch
+      which ensures fromdate uses the correct time during daylight savings
+
+ -- Christian Ehrhardt <christian.ehrhardt@canonical.com>  Tue, 05 Jan 2021 07:45:37 +0100
+
 jq (1.6-2.1) unstable; urgency=medium
 
   [ Paul Gevers ]
