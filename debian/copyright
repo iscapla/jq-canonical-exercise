@@ -1,6 +1,6 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: jq
-Source: <https://github.com/stedolan/jq>
+Source: <https://github.com/jqlang/jq>
 
 Files: *
 Copyright: 2012 Stephen Dolan <mu@netsoc.tcd.ie>
