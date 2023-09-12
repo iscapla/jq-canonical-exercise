@@ -12,6 +12,7 @@ libjq.so.1 libjq1 #MINVER#
  jq_get_jq_origin@Base 1.5
  jq_get_lib_dirs@Base 1.5
  jq_get_prog_origin@Base 1.5
+ jq_get_stderr_cb@Base 1.7
  jq_halt@Base 1.6
  jq_halted@Base 1.6
  jq_init@Base 1.5
@@ -27,6 +28,7 @@ libjq.so.1 libjq1 #MINVER#
  jq_set_error_cb@Base 1.5
  jq_set_input_cb@Base 1.5
  jq_set_nomem_handler@Base 1.5
+ jq_set_stderr_cb@Base 1.7
  jq_start@Base 1.5
  jq_teardown@Base 1.5
  jq_testsuite@Base 1.5
@@ -78,7 +80,7 @@ libjq.so.1 libjq1 #MINVER#
  jv_array@Base 1.5
  jv_array_append@Base 1.5
  jv_array_concat@Base 1.5
- jv_array_contains@Base 1.5
+#MISSING: 1.7-1# jv_array_contains@Base 1.5
  jv_array_get@Base 1.5
  jv_array_indexes@Base 1.5
  jv_array_length@Base 1.5
@@ -122,14 +124,17 @@ libjq.so.1 libjq1 #MINVER#
  jv_mem_realloc@Base 1.5
  jv_mem_strdup@Base 1.5
  jv_mem_strdup_unguarded@Base 1.5
- jv_mem_uninit_setup@Base 1.5
- jv_mem_uninitialised@Base 1.5
+#MISSING: 1.7-1# jv_mem_uninit_setup@Base 1.5
+#MISSING: 1.7-1# jv_mem_uninitialised@Base 1.5
  jv_nomem_handler@Base 1.5
  jv_null@Base 1.5
  jv_number@Base 1.5
+ jv_number_get_literal@Base 1.7
+ jv_number_has_literal@Base 1.7
  jv_number_value@Base 1.5
+ jv_number_with_literal@Base 1.7
  jv_object@Base 1.5
- jv_object_contains@Base 1.5
+#MISSING: 1.7-1# jv_object_contains@Base 1.5
  jv_object_delete@Base 1.5
  jv_object_get@Base 1.5
  jv_object_has@Base 1.6
@@ -172,3 +177,5 @@ libjq.so.1 libjq1 #MINVER#
  jv_string_value@Base 1.5
  jv_string_vfmt@Base 1.5
  jv_true@Base 1.5
+ jv_tsd_dec_ctx_fini@Base 1.7
+ jv_tsd_dec_ctx_init@Base 1.7
