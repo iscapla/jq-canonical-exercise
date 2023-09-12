@@ -10,7 +10,6 @@ ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
 endif
 
 override_dh_auto_configure:
-	cd docs && rake manpage > ../jq.1
 	dh_auto_configure -- --disable-static
 
 override_dh_install:
