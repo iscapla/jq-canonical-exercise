@@ -1,3 +1,13 @@
+jq (1.7-1) unstable; urgency=medium
+
+  * New upstream release. (Closes: #824814, #903081, #985350, #1025344)
+  * Remove unnecessary patches.
+  * Update libjq symbols.
+  * Add libjq.pc.
+  * d/control: Tweak indent.
+
+ -- ChangZhuo Chen (陳昌倬) <czchen@debian.org>  Wed, 13 Sep 2023 03:22:17 +0800
+
 jq (1.6-3) unstable; urgency=medium
 
   [ Alex Murray ]
