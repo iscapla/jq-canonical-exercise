@@ -8,12 +8,12 @@ Subject: Do not use venderized oniguruma
  1 file changed, 7 deletions(-)
 
 diff --git a/Makefile.am b/Makefile.am
-index df020b1..bbb49eb 100644
+index a2a82ca..c7c48ca 100644
 --- a/Makefile.am
 +++ b/Makefile.am
-@@ -138,13 +138,6 @@ jq.1: $(srcdir)/jq.1.prebuilt
- endif
+@@ -189,13 +189,6 @@ jq.1: jq.1.prebuilt
  
+ CLEANFILES += jq.1
  
 -### Build oniguruma
 -
@@ -24,4 +24,4 @@ index df020b1..bbb49eb 100644
 -
  AM_CFLAGS += $(onig_CFLAGS)
  
- ### Packaging
+ if WITH_ONIGURUMA

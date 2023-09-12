@@ -5,12 +5,14 @@ Subject: Ensure jq doesn't statically link in libraries
 Forwarded: not-needed
 ---
  Makefile.am | 3 +--
- tests/setup | 6 +++---
- 2 files changed, 4 insertions(+), 5 deletions(-)
+ tests/setup | 2 +-
+ 2 files changed, 2 insertions(+), 3 deletions(-)
 
+diff --git a/Makefile.am b/Makefile.am
+index c7c48ca..4f9a574 100644
 --- a/Makefile.am
 +++ b/Makefile.am
-@@ -106,7 +106,6 @@
+@@ -126,7 +126,6 @@ CLEANFILES = src/version.h .remake-version-h src/builtin.inc src/config_opts.inc
  
  bin_PROGRAMS = jq
  jq_SOURCES = src/main.c src/version.h
@@ -18,7 +20,7 @@ Forwarded: not-needed
  jq_LDADD = libjq.la -lm
  
  if WIN32
-@@ -114,7 +113,7 @@
+@@ -134,7 +133,7 @@ jq_LDADD += -lshlwapi
  endif
  
  if ENABLE_ALL_STATIC
@@ -27,17 +29,16 @@ Forwarded: not-needed
  endif
  
  ### Tests (make check)
+diff --git a/tests/setup b/tests/setup
+index c05f4ec..77e2a65 100755
 --- a/tests/setup
 +++ b/tests/setup
-@@ -13,8 +13,9 @@
- JQ=$JQBASEDIR/jq
+@@ -13,7 +13,7 @@ JQBASEDIR=$JQTESTDIR/..
+ JQ=${JQ:-$JQBASEDIR/jq}
  
  if [ -z "${NO_VALGRIND-}" ] && which valgrind > /dev/null; then
 -    VALGRIND="valgrind --error-exitcode=1 --leak-check=full \
--                       --suppressions=$JQTESTDIR/onig.supp"
-+    VALGRIND="libtool --mode=execute -- valgrind \
-+    		      	       --error-exitcode=1 --leak-check=full \
-+		      	       --suppressions=$JQTESTDIR/onig.supp"
++    VALGRIND="libtool --mode=execute -- valgrind --error-exitcode=1 --leak-check=full \
+                        --suppressions=$JQTESTDIR/onig.supp \
+                        --suppressions=$JQTESTDIR/local.supp"
      VG_EXIT0=--error-exitcode=0
-     Q=-q
- else
