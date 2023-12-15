@@ -9,19 +9,15 @@ Forwarded: not-needed
  2 files changed, 2 insertions(+), 3 deletions(-)
 
 diff --git a/Makefile.am b/Makefile.am
-index c7c48ca..4f9a574 100644
+index b29eed2..c762bf0 100644
 --- a/Makefile.am
 +++ b/Makefile.am
-@@ -126,7 +126,6 @@ CLEANFILES = src/version.h .remake-version-h src/builtin.inc src/config_opts.inc
+@@ -126,11 +126,10 @@ CLEANFILES = src/version.h .remake-version-h src/builtin.inc src/config_opts.inc
  
  bin_PROGRAMS = jq
  jq_SOURCES = src/main.c src/version.h
 -jq_LDFLAGS = -static-libtool-libs
  jq_LDADD = libjq.la -lm
- 
- if WIN32
-@@ -134,7 +133,7 @@ jq_LDADD += -lshlwapi
- endif
  
  if ENABLE_ALL_STATIC
 -jq_LDFLAGS += -all-static

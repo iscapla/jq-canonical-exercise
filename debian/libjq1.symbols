@@ -148,7 +148,9 @@ libjq.so.1 libjq1 #MINVER#
  jv_object_merge_recursive@Base 1.5
  jv_object_set@Base 1.5
  jv_parse@Base 1.5
+ jv_parse_custom_flags@Base 1.7.1
  jv_parse_sized@Base 1.5
+ jv_parse_sized_custom_flags@Base 1.7.1
  jv_parser_free@Base 1.5
  jv_parser_new@Base 1.5
  jv_parser_next@Base 1.5
