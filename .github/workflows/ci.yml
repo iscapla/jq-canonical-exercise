@@ -75,7 +75,7 @@ jobs:
       SUFFIX: linux-${{ matrix.arch }}
     steps:
       - name: Clone repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           submodules: true
       - name: Install packages
@@ -138,7 +138,7 @@ jobs:
       SUFFIX: macos-${{ matrix.arch }}
     steps:
       - name: Clone repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           submodules: true
       - name: Install packages
@@ -160,7 +160,7 @@ jobs:
             --enable-static \
             --enable-all-static \
             CFLAGS="-O2 -pthread -fstack-protector-all"
-          make -j"$(nproc)"
+          make -j"$(sysctl -n hw.logicalcpu)"
           strip ./jq
           file ./jq
           cp ./jq jq-${{ env.SUFFIX }}
@@ -207,8 +207,11 @@ jobs:
       run:
         shell: msys2 {0}
     steps:
+      - name: Prepare git config
+        run: git config --system core.autocrlf false
+        shell: bash
       - name: Clone repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           submodules: true
       - uses: msys2/setup-msys2@v2
@@ -240,7 +243,7 @@ jobs:
       - name: Test
         run: |
           make check VERBOSE=yes
-          git diff --exit-code --ignore-submodules
+          git diff --exit-code
       - name: Upload Test Logs
         if: ${{ failure() }}
         uses: actions/upload-artifact@v3
@@ -262,7 +265,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Clone repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           submodules: true
       - name: Install packages
@@ -297,7 +300,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/jq-')
     steps:
       - name: Clone repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Download executables
         uses: actions/download-artifact@v3
         with:
@@ -323,23 +326,23 @@ jobs:
           ENTRYPOINT ["/jq"]
           EOF
       - name: Docker metadata
-        uses: docker/metadata-action@v4
+        uses: docker/metadata-action@v5
         id: metadata
         with:
           images: ghcr.io/${{ github.repository }}
           tags: type=match,pattern=jq-(.*),group=1,value=${{ github.ref_name }}
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v2
+        uses: docker/setup-qemu-action@v3
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v3
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and release Docker image
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v5
         with:
           context: .
           push: true
@@ -358,7 +361,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/jq-')
     steps:
       - name: Clone repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Download artifacts
         uses: actions/download-artifact@v3
       - name: Upload release
@@ -366,11 +369,14 @@ jobs:
           TAG_NAME: ${{ github.ref_name }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          sha256sum jq-*/jq-* | sed 's| .*/| |' > sha256sum.txt
+          cp jq-linux/{jq-linux-amd64,jq-linux64}
+          cp jq-macos/{jq-macos-amd64,jq-osx-amd64}
+          cp jq-windows/{jq-windows-amd64.exe,jq-win64.exe}
+          sha256sum jq-*/jq-* | sed 's| .*/|  |' > sha256sum.txt
           gh release create "$TAG_NAME" --draft --title "jq ${TAG_NAME#jq-}" --generate-notes
           gh release upload "$TAG_NAME" --clobber jq-*/jq-* sha256sum.txt
       - name: Import GPG key
-        uses: crazy-max/ghaction-import-gpg@v5
+        uses: crazy-max/ghaction-import-gpg@v6
         with:
           gpg_private_key: ${{ secrets.JQ_RELEASE_GPG_PRIVATE_KEY }}
           passphrase: ${{ secrets.JQ_RELEASE_GPG_PASSPHRASE }}
