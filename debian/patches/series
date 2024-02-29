@@ -3,3 +3,4 @@ dont-distribute-duplicate-docs.patch
 0008-Do-not-use-venderized-oniguruma.patch
 disable-static-libtool.patch
 0006-Do-not-use-pipenv-to-build-docs.patch
+libtool.patch
