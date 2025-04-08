@@ -8,6 +8,9 @@ Subject: Do not use pipenv to build docs
  configure.ac | 25 -------------------------
  2 files changed, 4 insertions(+), 29 deletions(-)
 
+Bug-Debian: https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=1102376
+Last-Update: 2025-04-08
+
 diff --git a/Makefile.am b/Makefile.am
 index c762bf0..86c1e33 100644
 --- a/Makefile.am
@@ -18,8 +21,8 @@ index c762bf0..86c1e33 100644
  	$(AM_V_GEN) ( cd ${abs_srcdir}/docs && \
 -		$(PIPENV) run python validate_manual_schema.py content/manual/manual.yml && \
 -		$(PIPENV) run python build_mantests.py )
-+		python validate_manual_schema.py content/manual/manual.yml && \
-+		python build_mantests.py )
++		python3 validate_manual_schema.py content/manual/manual.yml && \
++		python3 build_mantests.py )
  else
  	@echo Changes to the manual.yml require docs to be enabled to update the manual test.
  	@echo As a result, the manual test is out of date.
@@ -29,8 +32,8 @@ index c762bf0..86c1e33 100644
  	$(AM_V_GEN) ( cd ${abs_srcdir}/docs && \
 -		$(PIPENV) run python validate_manual_schema.py content/manual/manual.yml && \
 -		$(PIPENV) run python build_manpage.py ) > $@
-+		python validate_manual_schema.py content/manual/manual.yml && \
-+		python build_manpage.py ) > $@
++		python3 validate_manual_schema.py content/manual/manual.yml && \
++		python3 build_manpage.py ) > $@
  else
  	@echo Changes to the manual.yml require docs to be enabled to update the manpage.
  	@echo As a result, the manpage is out of date.
