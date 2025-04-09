@@ -1,3 +1,10 @@
+jq (1.7.1-4) unstable; urgency=medium
+
+  [ Andreas Hasenack ]
+  * Update patch to call python3 instead of python (Closes: #1102376)
+
+ -- ChangZhuo Chen (陳昌倬) <czchen@debian.org>  Wed, 09 Apr 2025 22:34:25 +0800
+
 jq (1.7.1-3) unstable; urgency=medium
 
   [ Helmut Grohne ]
