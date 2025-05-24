@@ -5,3 +5,4 @@ disable-static-libtool.patch
 0006-Do-not-use-pipenv-to-build-docs.patch
 libtool.patch
 CVE-2024-53427.patch
+CVE-2024-23337.patch
