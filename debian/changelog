@@ -1,3 +1,12 @@
+jq (1.8.0-1) unstable; urgency=medium
+
+  * New upstream release. (Closes: #1106288)
+    * Fix CVE-2024-23337, CVE-2024-53427, CVE-2025-48060.
+  * d/copyright: Update copyright.
+  * d/symbols: Update symbols.
+
+ -- ChangZhuo Chen (陳昌倬) <czchen@debian.org>  Mon, 09 Jun 2025 09:40:21 +0800
+
 jq (1.7.1-6) unstable; urgency=medium
 
   * Cherry-pick upstream commit for CVE-2024-23337 (Closes: #1106289)
