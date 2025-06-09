@@ -129,8 +129,10 @@ libjq.so.1 libjq1 #MINVER#
  jv_nomem_handler@Base 1.5
  jv_null@Base 1.5
  jv_number@Base 1.5
+ jv_number_abs@Base 1.8.0
  jv_number_get_literal@Base 1.7
  jv_number_has_literal@Base 1.7
+ jv_number_negate@Base 1.8.0
  jv_number_value@Base 1.5
  jv_number_with_literal@Base 1.7
  jv_object@Base 1.5
@@ -173,6 +175,7 @@ libjq.so.1 libjq1 #MINVER#
  jv_string_indexes@Base 1.5
  jv_string_length_bytes@Base 1.5
  jv_string_length_codepoints@Base 1.5
+ jv_string_repeat@Base 1.8.0
  jv_string_sized@Base 1.5
  jv_string_slice@Base 1.5
  jv_string_split@Base 1.5
@@ -181,3 +184,4 @@ libjq.so.1 libjq1 #MINVER#
  jv_true@Base 1.5
  jv_tsd_dec_ctx_fini@Base 1.7
  jv_tsd_dec_ctx_init@Base 1.7
+ jv_unique@Base 1.8.0
