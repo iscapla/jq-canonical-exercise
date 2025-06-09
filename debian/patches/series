@@ -1,8 +1,4 @@
 patch-version-into-build.patch
 dont-distribute-duplicate-docs.patch
 0008-Do-not-use-venderized-oniguruma.patch
-disable-static-libtool.patch
 0006-Do-not-use-pipenv-to-build-docs.patch
-libtool.patch
-CVE-2024-53427.patch
-CVE-2024-23337.patch

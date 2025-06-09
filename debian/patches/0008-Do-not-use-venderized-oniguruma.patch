@@ -1,6 +1,6 @@
 From: =?utf-8?b?IkNoYW5nWmh1byBDaGVuICjpmbPmmIzlgKwpIg==?=
  <czchen@debian.org>
-Date: Sun, 4 Nov 2018 22:38:18 +0800
+Date: Mon, 9 Jun 2025 09:14:18 +0800
 Subject: Do not use venderized oniguruma
 
 ---
@@ -8,18 +8,18 @@ Subject: Do not use venderized oniguruma
  1 file changed, 7 deletions(-)
 
 diff --git a/Makefile.am b/Makefile.am
-index 6fbc924..b29eed2 100644
+index 1715364..3634035 100644
 --- a/Makefile.am
 +++ b/Makefile.am
-@@ -185,13 +185,6 @@ jq.1: jq.1.prebuilt
+@@ -189,13 +189,6 @@ jq.1: jq.1.prebuilt
  
  CLEANFILES += jq.1
  
 -### Build oniguruma
 -
 -if BUILD_ONIGURUMA
--libjq_la_LIBADD += modules/oniguruma/src/.libs/libonig.la
--SUBDIRS = modules/oniguruma
+-libjq_la_LIBADD += vendor/oniguruma/src/.libs/libonig.la
+-SUBDIRS = vendor/oniguruma
 -endif
 -
  AM_CFLAGS += $(onig_CFLAGS)
