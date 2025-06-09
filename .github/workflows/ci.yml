@@ -65,7 +65,7 @@ jobs:
             CC: riscv64-linux-gnu
           - arch: s390x
             CC: s390x-linux-gnu
-    runs-on: ubuntu-22.04
+    runs-on: ${{ matrix.arch == 'i386' && 'ubuntu-22.04' || 'ubuntu-24.04' }}
     env:
       AR: ${{ matrix.CC }}-ar
       CHOST: ${{ matrix.CC }}
@@ -81,7 +81,6 @@ jobs:
       - name: Install packages
         run: |
           sudo apt-get update
-          sudo apt-get upgrade
           sudo apt-get install -y automake autoconf libtool crossbuild-essential-${{ matrix.arch }}
       - name: Build
         run: |
@@ -89,7 +88,6 @@ jobs:
           ./configure \
             --host=${{ matrix.CC }} \
             --disable-docs \
-            --disable-valgrind \
             --with-oniguruma=builtin \
             --enable-static \
             --enable-all-static \
@@ -105,7 +103,7 @@ jobs:
           git diff --exit-code
       - name: Upload Test Logs
         if: ${{ failure() }}
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: test-logs-${{ env.SUFFIX }}
           retention-days: 7
@@ -113,9 +111,9 @@ jobs:
             test-suite.log
             tests/*.log
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: jq-linux
+          name: jq-${{ env.SUFFIX }}
           path: jq-${{ env.SUFFIX }}
           if-no-files-found: error
           retention-days: 7
@@ -132,7 +130,7 @@ jobs:
             target: x86_64-apple-darwin
           - arch: arm64
             target: arm64-apple-darwin
-    runs-on: macos-13
+    runs-on: macos-14
     env:
       LDFLAGS: -dead_strip
       SUFFIX: macos-${{ matrix.arch }}
@@ -155,8 +153,8 @@ jobs:
           ./configure \
             --host="${{ matrix.target }}$(uname -r)" \
             --disable-docs \
-            --disable-valgrind \
             --with-oniguruma=builtin \
+            --disable-shared \
             --enable-static \
             --enable-all-static \
             CFLAGS="-O2 -pthread -fstack-protector-all"
@@ -165,14 +163,12 @@ jobs:
           file ./jq
           cp ./jq jq-${{ env.SUFFIX }}
       - name: Test
-        # Only run tests for amd64 matching the CI machine arch
-        if: ${{ matrix.arch == 'amd64' }}
         run: |
           make check VERBOSE=yes
           git diff --exit-code
       - name: Upload Test Logs
         if: ${{ failure() }}
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: test-logs-${{ env.SUFFIX }}
           retention-days: 7
@@ -180,9 +176,9 @@ jobs:
             test-suite.log
             tests/*.log
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: jq-macos
+          name: jq-${{ env.SUFFIX }}
           path: jq-${{ env.SUFFIX }}
           if-no-files-found: error
           retention-days: 7
@@ -231,7 +227,6 @@ jobs:
           autoreconf -i
           ./configure \
             --disable-docs \
-            --disable-valgrind \
             --with-oniguruma=builtin \
             --disable-shared \
             --enable-static \
@@ -246,7 +241,7 @@ jobs:
           git diff --exit-code
       - name: Upload Test Logs
         if: ${{ failure() }}
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: test-logs-${{ env.SUFFIX }}
           retention-days: 7
@@ -254,9 +249,9 @@ jobs:
             test-suite.log
             tests/*.log
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: jq-windows
+          name: jq-${{ env.SUFFIX }}
           path: jq-${{ env.SUFFIX }}.exe
           if-no-files-found: error
           retention-days: 7
@@ -277,13 +272,12 @@ jobs:
           autoreconf -i
           ./configure \
             --disable-docs \
-            --disable-valgrind \
             --with-oniguruma=builtin
           make distcheck
           make dist dist-zip
           git diff --exit-code
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: jq-dist
           if-no-files-found: error
@@ -295,16 +289,19 @@ jobs:
   docker:
     runs-on: ubuntu-latest
     permissions:
+      id-token: write
+      contents: read
+      attestations: write
       packages: write
     needs: linux
-    if: startsWith(github.ref, 'refs/tags/jq-')
     steps:
       - name: Clone repository
         uses: actions/checkout@v4
       - name: Download executables
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
-          name: jq-linux
+          pattern: jq-linux-*
+          merge-multiple: true
       - name: Move executables
         run: |
           mkdir -p linux/{386,amd64,arm64,mips64le,ppc64le,riscv64,s390x}
@@ -330,7 +327,10 @@ jobs:
         id: metadata
         with:
           images: ghcr.io/${{ github.repository }}
-          tags: type=match,pattern=jq-(.*),group=1,value=${{ github.ref_name }}
+          tags: >
+            ${{ startsWith(github.ref, 'refs/tags/jq-')
+            && format('type=match,pattern=jq-(.*),group=1,value={0}', github.ref_name)
+            || 'type=sha,format=long' }}
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
       - name: Set up Docker Buildx
@@ -342,19 +342,29 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and release Docker image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
+        id: build-push
         with:
           context: .
-          push: true
+          push: ${{ startsWith(github.ref, 'refs/tags/jq-') }}
           provenance: false
           platforms: linux/386,linux/amd64,linux/arm64,linux/mips64le,linux/ppc64le,linux/riscv64,linux/s390x
           tags: ${{ steps.metadata.outputs.tags }}
           labels: ${{ steps.metadata.outputs.labels }}
+      - name: Generate signed attestations
+        if: startsWith(github.ref, 'refs/tags/jq-')
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ghcr.io/${{ github.repository }}
+          subject-digest: ${{ steps.build-push.outputs.digest }}
+          push-to-registry: true
 
   release:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      id-token: write
+      attestations: write
       pull-requests: write
     environment: release
     needs: [linux, macos, windows, dist, docker]
@@ -363,18 +373,25 @@ jobs:
       - name: Clone repository
         uses: actions/checkout@v4
       - name: Download artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
+        with:
+          pattern: jq-*
+          merge-multiple: true
       - name: Upload release
         env:
           TAG_NAME: ${{ github.ref_name }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          cp jq-linux/{jq-linux-amd64,jq-linux64}
-          cp jq-macos/{jq-macos-amd64,jq-osx-amd64}
-          cp jq-windows/{jq-windows-amd64.exe,jq-win64.exe}
-          sha256sum jq-*/jq-* | sed 's| .*/|  |' > sha256sum.txt
+          cp jq-linux-amd64 jq-linux64
+          cp jq-macos-amd64 jq-osx-amd64
+          cp jq-windows-amd64.exe jq-win64.exe
+          sha256sum jq-* > sha256sum.txt
           gh release create "$TAG_NAME" --draft --title "jq ${TAG_NAME#jq-}" --generate-notes
-          gh release upload "$TAG_NAME" --clobber jq-*/jq-* sha256sum.txt
+          gh release upload "$TAG_NAME" --clobber jq-* sha256sum.txt
+      - name: Generate signed attestations
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: jq-*
       - name: Import GPG key
         uses: crazy-max/ghaction-import-gpg@v6
         with:
@@ -388,7 +405,7 @@ jobs:
           sig_dir="sig/v${TAG_NAME#jq-}"
           mkdir -p "$sig_dir"
           mv sha256sum.txt "$sig_dir"
-          for file in jq-*/jq-*; do
+          for file in jq-*; do
             gpg --detach-sign --armor --batch --output "${sig_dir}/${file#*/}.asc" "$file"
           done
           git add sig

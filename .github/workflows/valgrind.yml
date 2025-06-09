@@ -7,7 +7,7 @@ on:
 
 jobs:
   linux:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Clone repository
         uses: actions/checkout@v4
@@ -16,13 +16,13 @@ jobs:
       - name: Install packages
         run: |
           sudo apt-get update
-          sudo apt-get upgrade
           sudo apt-get install -y automake autoconf libtool valgrind
       - name: Build
         run: |
           autoreconf -i
           ./configure \
             --disable-docs \
+            --enable-valgrind \
             --with-oniguruma=builtin
           make -j"$(nproc)"
           file ./jq
@@ -32,7 +32,7 @@ jobs:
           git diff --exit-code
       - name: Upload Test Logs
         if: ${{ failure() }}
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: test-logs-valgrind-linux
           retention-days: 7
