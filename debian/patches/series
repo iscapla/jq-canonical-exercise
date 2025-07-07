@@ -6,3 +6,4 @@ disable-static-libtool.patch
 libtool.patch
 CVE-2024-53427.patch
 CVE-2024-23337.patch
+CVE-2025-48060.patch

@@ -1,3 +1,9 @@
+jq (1.7.1-6+deb13u1) trixie; urgency=medium
+
+  * Cherry-pick upstream commit for CVE-2025-48060.
+
+ -- ChangZhuo Chen (陳昌倬) <czchen@debian.org>  Tue, 08 Jul 2025 00:16:39 +0800
+
 jq (1.7.1-6) unstable; urgency=medium
 
   * Cherry-pick upstream commit for CVE-2024-23337 (Closes: #1106289)
