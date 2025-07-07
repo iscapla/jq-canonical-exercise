@@ -9,7 +9,7 @@ Subject: Do not use pipenv to build docs
  2 files changed, 4 insertions(+), 29 deletions(-)
 
 diff --git a/Makefile.am b/Makefile.am
-index 3634035..03f9369 100644
+index d4c6bbb..60563e6 100644
 --- a/Makefile.am
 +++ b/Makefile.am
 @@ -161,8 +161,8 @@ check_DATA = tests/man.test

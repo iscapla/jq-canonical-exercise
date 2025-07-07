@@ -4,14 +4,14 @@ Date: Mon, 9 Jun 2025 09:14:18 +0800
 Subject: Do not use venderized oniguruma
 
 ---
- Makefile.am | 7 -------
- 1 file changed, 7 deletions(-)
+ Makefile.am | 8 --------
+ 1 file changed, 8 deletions(-)
 
 diff --git a/Makefile.am b/Makefile.am
-index 1715364..3634035 100644
+index 7387506..d4c6bbb 100644
 --- a/Makefile.am
 +++ b/Makefile.am
-@@ -189,13 +189,6 @@ jq.1: jq.1.prebuilt
+@@ -189,14 +189,6 @@ jq.1: jq.1.prebuilt
  
  CLEANFILES += jq.1
  
@@ -19,6 +19,7 @@ index 1715364..3634035 100644
 -
 -if BUILD_ONIGURUMA
 -libjq_la_LIBADD += vendor/oniguruma/src/.libs/libonig.la
+-jq_LDADD += vendor/oniguruma/src/.libs/libonig.la
 -SUBDIRS = vendor/oniguruma
 -endif
 -

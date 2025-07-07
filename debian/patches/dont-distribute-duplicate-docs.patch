@@ -10,10 +10,10 @@ Last-Update: 2015-10-11
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/Makefile.am b/Makefile.am
-index b6ac671..1715364 100644
+index 1df4143..7387506 100644
 --- a/Makefile.am
 +++ b/Makefile.am
-@@ -237,7 +237,7 @@ AM_DISTCHECK_CONFIGURE_FLAGS=--with-oniguruma=builtin
+@@ -238,7 +238,7 @@ AM_DISTCHECK_CONFIGURE_FLAGS=--with-oniguruma=builtin
  
  # README.md is expected in GitHub projects, good stuff in it, so we'll
  # distribute it and install it with the package in the doc directory.

@@ -30,4 +30,4 @@ index f24a18d..1644f51 100755
 -  commit=$(git describe --always --dirty)
 -  echo "${branch}-${commit}"
 -fi
-+echo '1.8'
++echo '1.8.1'
