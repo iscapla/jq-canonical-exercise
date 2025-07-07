@@ -1559,14 +1559,9 @@ static jv f_strptime(jq_state *jq, jv a, jv b) {
   memset(&tm, 0, sizeof(tm));
   tm.tm_wday = 8; // sentinel
   tm.tm_yday = 367; // sentinel
+
   const char *input = jv_string_value(a);
   const char *fmt = jv_string_value(b);
-
-#ifndef HAVE_STRPTIME
-  if (strcmp(fmt, "%Y-%m-%dT%H:%M:%SZ")) {
-    return ret_error2(a, b, jv_string("strptime/1 only supports ISO 8601 on this platform"));
-  }
-#endif
   const char *end = strptime(input, fmt, &tm);
   if (end == NULL || (*end != '\0' && !isspace((unsigned char)*end))) {
     return ret_error2(a, b, jv_string_fmt("date \"%s\" does not match format \"%s\"", input, fmt));
@@ -1769,6 +1764,7 @@ static jv f_strftime(jq_state *jq, jv a, jv b) {
     return ret_error(b, jv_string("strftime/1 requires parsed datetime inputs"));
 
   const char *fmt = jv_string_value(b);
+  int fmt_not_empty = *fmt != '\0';
   size_t max_size = strlen(fmt) + 100;
   char *buf = jv_mem_alloc(max_size);
 #ifdef __APPLE__
@@ -1789,7 +1785,7 @@ static jv f_strftime(jq_state *jq, jv a, jv b) {
 #endif
   jv_free(b);
   /* POSIX doesn't provide errno values for strftime() failures; weird */
-  if ((n == 0 && *fmt) || n > max_size) {
+  if ((n == 0 && fmt_not_empty) || n > max_size) {
     free(buf);
     return jv_invalid_with_msg(jv_string("strftime/1: unknown system failure"));
   }
@@ -1818,12 +1814,13 @@ static jv f_strflocaltime(jq_state *jq, jv a, jv b) {
   if (!jv2tm(a, &tm, 1))
     return ret_error(b, jv_string("strflocaltime/1 requires parsed datetime inputs"));
   const char *fmt = jv_string_value(b);
+  int fmt_not_empty = *fmt != '\0';
   size_t max_size = strlen(fmt) + 100;
   char *buf = jv_mem_alloc(max_size);
   size_t n = strftime(buf, max_size, fmt, &tm);
   jv_free(b);
   /* POSIX doesn't provide errno values for strftime() failures; weird */
-  if ((n == 0 && *fmt) || n > max_size) {
+  if ((n == 0 && fmt_not_empty) || n > max_size) {
     free(buf);
     return jv_invalid_with_msg(jv_string("strflocaltime/1: unknown system failure"));
   }
