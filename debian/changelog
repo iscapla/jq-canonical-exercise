@@ -1,7 +1,7 @@
 jq (1.8.1-1) unstable; urgency=medium
 
   * New upstream release:
-    * Fix CVE-2025-49014, GHSA-f946-j5j2-4w5m.
+    * Fix CVE-2025-49014, GHSA-f946-j5j2-4w5m (Closes: #1108062)
 
  -- ChangZhuo Chen (陳昌倬) <czchen@debian.org>  Mon, 07 Jul 2025 23:55:25 +0800
 
