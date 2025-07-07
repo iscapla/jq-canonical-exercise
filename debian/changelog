@@ -1,7 +1,15 @@
+jq (1.8.1-1) unstable; urgency=medium
+
+  * New upstream release:
+    * Fix CVE-2025-49014, GHSA-f946-j5j2-4w5m.
+
+ -- ChangZhuo Chen (陳昌倬) <czchen@debian.org>  Mon, 07 Jul 2025 23:55:25 +0800
+
 jq (1.8.0-1) unstable; urgency=medium
 
   * New upstream release. (Closes: #1106288)
     * Fix CVE-2024-23337, CVE-2024-53427, CVE-2025-48060.
+  * d/control: Bump Standards-Version to 4.7.2.
   * d/copyright: Update copyright.
   * d/symbols: Update symbols.
 
