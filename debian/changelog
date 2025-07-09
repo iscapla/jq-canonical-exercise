@@ -1,3 +1,10 @@
+jq (1.6-2.1+deb12u1) bookworm; urgency=medium
+
+  * Cherry-pick upstream commit c6e041699d8cd31b97375a2596217aff2cfca85b to
+    fix CVE-2025-48060.
+
+ -- ChangZhuo Chen (陳昌倬) <czchen@debian.org>  Wed, 09 Jul 2025 22:23:15 +0800
+
 jq (1.6-2.1) unstable; urgency=medium
 
   [ Paul Gevers ]

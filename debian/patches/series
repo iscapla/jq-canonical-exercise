@@ -8,3 +8,4 @@ disable-static-libtool.patch
 0008-Do-not-use-venderized-oniguruma.patch
 0009-Hardcode-version-to-1.6.patch
 0010-initialized-variables.patch
+CVE-2025-48060.patch
