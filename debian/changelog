@@ -1,3 +1,10 @@
+jq (1.8.1-2) unstable; urgency=medium
+
+  * Enable time64 abi to fix i386 unit test fails (Closes: #1108854)
+  * Use dpkg-parsechangelog to get build version (Closes: #1108533)
+
+ -- ChangZhuo Chen (陳昌倬) <czchen@debian.org>  Wed, 09 Jul 2025 21:30:59 +0800
+
 jq (1.8.1-1) unstable; urgency=medium
 
   * New upstream release:
