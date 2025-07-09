@@ -1,19 +1,14 @@
 From: =?utf-8?b?IkNoYW5nWmh1byBDaGVuICjpmbPmmIzlgKwpIg==?=
  <czchen@debian.org>
 Date: Mon, 9 Jun 2025 09:11:06 +0800
-Subject: Set release version manually.
+Subject: Use dpkg-parsechangelog to get build version
 
-jq sets the build version by parsing the git branch. There is no git branch during
-package building however. This patch sets the version manually. The version can be
-looked up using `git describe --tags --match 'upstream*' | sed 's/^upstream\///'`.
-Bug: https://github.com/stedolan/jq/issues/434
-Last-Update: 2014-06-21
 ---
  scripts/version | 13 +------------
  1 file changed, 1 insertion(+), 12 deletions(-)
 
 diff --git a/scripts/version b/scripts/version
-index f24a18d..1644f51 100755
+index f24a18d..b567656 100755
 --- a/scripts/version
 +++ b/scripts/version
 @@ -1,13 +1,2 @@
@@ -30,4 +25,4 @@ index f24a18d..1644f51 100755
 -  commit=$(git describe --always --dirty)
 -  echo "${branch}-${commit}"
 -fi
-+echo '1.8.1'
++dpkg-parsechangelog | grep --basic-regex '^Version: ' | cut --delimiter=' ' --field=2 | cut --delimiter='-' --field=1

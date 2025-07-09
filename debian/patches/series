@@ -1,4 +1,4 @@
-patch-version-into-build.patch
+get-version.patch
 dont-distribute-duplicate-docs.patch
 0008-Do-not-use-venderized-oniguruma.patch
 0006-Do-not-use-pipenv-to-build-docs.patch
