@@ -8,7 +8,7 @@ Subject: Use dpkg-parsechangelog to get build version
  1 file changed, 1 insertion(+), 12 deletions(-)
 
 diff --git a/scripts/version b/scripts/version
-index f24a18d..b567656 100755
+index f24a18d..41c1947 100755
 --- a/scripts/version
 +++ b/scripts/version
 @@ -1,13 +1,2 @@
@@ -25,4 +25,4 @@ index f24a18d..b567656 100755
 -  commit=$(git describe --always --dirty)
 -  echo "${branch}-${commit}"
 -fi
-+dpkg-parsechangelog | grep --basic-regex '^Version: ' | cut --delimiter=' ' --field=2 | cut --delimiter='-' --field=1
++dpkg-parsechangelog --show-field Version | cut --delimiter='-' --field=1
