@@ -7,12 +7,12 @@ Build-Depends: debhelper-compat (= 13),
                flex,
                libonig-dev,
                libtool,
-               python3-jinja2,
-               python3-yaml,
+               python3-jinja2:native,
+               python3-yaml:native,
                python3-markdown,
-               python3-lxml,
-               python3-jsonschema,
-               valgrind [amd64],
+               python3-lxml:native,
+               python3-jsonschema:native,
+               valgrind [amd64] <!nocheck>,
 Standards-Version: 4.7.2
 Rules-Requires-Root: no
 Homepage: https://jqlang.github.io/jq
