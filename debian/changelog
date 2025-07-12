@@ -1,3 +1,15 @@
+jq (1.8.1-3) unstable; urgency=medium
+
+  [ ChangZhuo Chen (陳昌倬) ]
+  * Simplify version script.
+
+  [ Helmut Grohne ]
+  * Fix FTCBFS (Closes: #1108106)
+    * Request python stack for the native architecture.
+    * Skip valgrind dependency when not testing.
+
+ -- ChangZhuo Chen (陳昌倬) <czchen@debian.org>  Sat, 12 Jul 2025 21:35:39 +0800
+
 jq (1.8.1-2) unstable; urgency=medium
 
   * Enable time64 abi to fix i386 unit test fails (Closes: #1108854)
