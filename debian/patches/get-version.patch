@@ -3,6 +3,7 @@ From: =?utf-8?b?IkNoYW5nWmh1byBDaGVuICjpmbPmmIzlgKwpIg==?=
 Date: Mon, 9 Jun 2025 09:11:06 +0800
 Subject: Use dpkg-parsechangelog to get build version
 
+Forwarded: not-needed
 ---
  scripts/version | 13 +------------
  1 file changed, 1 insertion(+), 12 deletions(-)
