@@ -8,11 +8,11 @@ Build-Depends: debhelper-compat (= 13),
                libonig-dev,
                libtool,
                python3-jinja2:native,
-               python3-yaml:native,
-               python3-markdown,
-               python3-lxml:native,
                python3-jsonschema:native,
-               valgrind [amd64] <!nocheck>,
+               python3-lxml:native,
+               python3-markdown,
+               python3-yaml:native,
+               valgrind [amd64] <!nocheck>
 Standards-Version: 4.7.2
 Rules-Requires-Root: no
 Homepage: https://jqlang.github.io/jq
@@ -22,9 +22,7 @@ Vcs-Browser: https://salsa.debian.org/debian/jq
 Package: jq
 Architecture: any
 Multi-Arch: foreign
-Depends: ${shlibs:Depends},
-         ${misc:Depends},
-         libjq1 (= ${binary:Version})
+Depends: libjq1 (= ${binary:Version}), ${misc:Depends}, ${shlibs:Depends}
 Description: lightweight and flexible command-line JSON processor
  jq is like sed for JSON data – you can use it to slice
  and filter and map and transform structured data with
@@ -42,8 +40,7 @@ Description: lightweight and flexible command-line JSON processor
 Package: libjq1
 Architecture: any
 Multi-Arch: same
-Depends: ${shlibs:Depends},
-         ${misc:Depends}
+Depends: ${misc:Depends}, ${shlibs:Depends}
 Description: lightweight and flexible command-line JSON processor - shared library
  jq is like sed for JSON data – you can use it to slice
  and filter and map and transform structured data with
@@ -64,9 +61,7 @@ Package: libjq-dev
 Section: libdevel
 Architecture: any
 Multi-Arch: same
-Depends: ${shlibs:Depends},
-         ${misc:Depends},
-         libjq1 (= ${binary:Version})
+Depends: libjq1 (= ${binary:Version}), ${misc:Depends}, ${shlibs:Depends}
 Description: lightweight and flexible command-line JSON processor - development files
  jq is like sed for JSON data – you can use it to slice
  and filter and map and transform structured data with
