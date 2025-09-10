@@ -38,6 +38,7 @@ Description: lightweight and flexible command-line JSON processor
  you’d expect.
 
 Package: libjq1
+Section: libs
 Architecture: any
 Multi-Arch: same
 Depends: ${misc:Depends}, ${shlibs:Depends}
